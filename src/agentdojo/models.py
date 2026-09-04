@@ -75,6 +75,7 @@ class ModelsEnum(StrEnum):
     QWEN_2_5_72B = "qwen/qwen-2.5-72b-instruct"
     LLAMA_3_3_70B = "meta-llama/llama-3.3-70b-instruct"
     QWEN3_235B = "qwen/qwen3-235b-a22b-2507"
+    QWEN3_6_35B_A3B = "qwen/qwen3.6-35b-a3b"
     OPENROUTER_GEMINI_2_5_PRO = "google/gemini-2.5-pro"
     OPENROUTER_GEMINI_2_5_FLASH = "google/gemini-2.5-flash"
     OPENROUTER_GEMINI_3_PRO_PREVIEW = "google/gemini-3-pro-preview"
@@ -121,6 +122,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.QWEN_2_5_72B: "openrouter",
     ModelsEnum.LLAMA_3_3_70B: "openrouter",
     ModelsEnum.QWEN3_235B: "openrouter",
+    ModelsEnum.QWEN3_6_35B_A3B: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_2_5_PRO: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_2_5_FLASH: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_3_PRO_PREVIEW: "openrouter",
@@ -167,7 +169,8 @@ MODEL_NAMES = {
     "vllm_parsed": "Local model",
     "qwen/qwen-2.5-72b-instruct": "Qwen 2.5",
     "meta-llama/llama-3.3-70b-instruct": "Llama 3.3",
-    "qwen/qwen3-235b-a22b-2507" : "Qwen 3", 
+    "qwen/qwen3-235b-a22b-2507" : "Qwen 3",
+    "qwen/qwen3.6-35b-a3b": "Qwen 3",
     "google/gemini-2.5-pro": "AI model developed by Google",
     "google/gemini-2.5-flash" : "AI model developed by Google", 
     "google/gemini-3-pro-preview": "AI model developed by Google",

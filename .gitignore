@@ -2,4 +2,6 @@
 */slack/*
 */travel/*
 */workspace/*
-*__pycache__*.venv-test/
+__pycache__/
+*.pyc
+.venv-test/
