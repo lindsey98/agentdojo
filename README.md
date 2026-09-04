@@ -16,9 +16,9 @@ into one pip-installable package, so downstream defense repos can depend on a si
 ## Install
 
 ```bash
-pip install git+https://github.com/lindsey98/agentdojo-unified.git
+pip install git+https://github.com/lindsey98/agentdojo.git
 # or, for development:
-git clone https://github.com/lindsey98/agentdojo-unified.git && pip install -e agentdojo-unified
+git clone https://github.com/lindsey98/agentdojo.git && pip install -e agentdojo-unified
 ```
 
 The LlamaFirewall-based ADI agent needs the extra: `pip install "agentdojo[adi] @ git+..."`.
