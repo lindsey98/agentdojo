@@ -8,7 +8,7 @@ into one pip-installable package, so downstream defense repos can depend on a si
 | Component | Source | What it adds |
 |---|---|---|
 | AgentDojo v0.1.35 | [ethz-spylab/agentdojo](https://github.com/ethz-spylab/agentdojo) | Base framework, suites v1–v1.2.2 (workspace, banking, slack, travel) |
-| AgentDyn | [SaFo-Lab/AgentDyn](https://github.com/SaFo-Lab/AgentDyn) ([paper](https://arxiv.org/pdf/2602.03117)) | `shopping`, `github`, `dailylife` dynamic suites; PIGuard / PromptGuard2 detectors; CaMeL / Progent / DRIFT defense integrations under `src/agentdojo/defenses/` |
+| AgentDyn | [SaFo-Lab/AgentDyn](https://github.com/SaFo-Lab/AgentDyn) ([paper](https://arxiv.org/pdf/2602.03117)) | `shopping`, `github`, `dailylife` dynamic suites; built-in `piguard_detector` / `prompt_guard_2_detector` / `transformers_pi_detector`; `--defense camel`/`drift`/`progent` hooks that import those repos' own code (see below) |
 | ADI | [compsec-snu/adi](https://github.com/compsec-snu/adi) | Agent Data Injection attacks (`data_only_syntactic`, `data_only_semantic`), LangGraph agent loading (`--agent`; agent implementations not vendored — point the loader at your own `agents/` dir or see the ADI repo), `camel_bypass_poc` suite |
 | ChatInject | [hwanchang00/ChatInject](https://github.com/hwanchang00/ChatInject) | Chat-template role-confusion attacks (`chat_inject_qwen3`, `chat_inject_glm`, multi-turn `*_with_utility_*` variants with pre-generated dialogues) |
 | Cascade | [arXiv:2510.05244](https://arxiv.org/abs/2510.05244) | Stage-2 semantic-template attacks (`cascade_user_note`, `cascade_task_queue`, `cascade_safe_tags`, `cascade_decoy_safe_tags`, `cascade_skip_directive`, `cascade_triple_layer`, `cascade_decoy_system_update`) and the Stage-3 adaptive attack (`cascade_adaptive`) |
@@ -62,6 +62,30 @@ Notes:
 - The upstream `runs/` results directories were dropped from this fork to keep
   `pip install git+...` fast; see the source repos for the papers' logs.
 
+## External defenses (`--defense camel` / `drift` / `progent`)
+
+These three defenses are **not vendored** in the package. When selected, the pipeline
+adds the corresponding repo to `sys.path` and imports its own code, searching in order:
+
+1. `<agentdojo repo>/src/agentdojo/defenses/<name>` (empty in this fork)
+2. the **workspace root** = the directory *containing* the agentdojo repo
+
+So the intended layout is a source/editable install with the defense repos as siblings:
+
+```
+PycharmProjects/
+├── agentdojo/                 # pip install -e . (this repo)
+├── camel-prompt-injection/    # --defense camel   -> imports camel.* from ./src
+├── DRIFT/                     # --defense drift   -> imports client, DRIFTLLM, ...
+└── progent/                   # --defense progent -> imports secagent
+```
+
+Repo-name aliases: `camel` -> `camel-prompt-injection`, `drift` -> `DRIFT`, `progent` -> `progent`.
+`piguard_detector` / `prompt_guard_2_detector` / `transformers_pi_detector` (incl. ipiguard's
+PIGuard, HF `leolee99/PIGuard`) are built in and need no external repo. Note: the workspace-root
+fallback only resolves when agentdojo is installed from source (so its parent dir is your
+workspace); a non-editable `pip install` into site-packages would not find sibling repos.
+
 ## Merge notes
 
 - Base: upstream tag `v0.1.35`; AgentDyn and ADI imported as branches and merged.
@@ -70,6 +94,8 @@ Notes:
 - ADI's `agents/` defense implementations are not vendored (plain agentdojo package only);
   the `--agent` loader remains and can be pointed at an external agents directory.
 - ADI's `llamafirewall` hard dependency was dropped (nothing in the package imports it).
+- AgentDyn's vendored `src/agentdojo/defenses/{camel,drift,progent}` copies were removed; the
+  `--defense` hooks now resolve those repos from the workspace root (see "External defenses").
 - ADI's `camel_bypass_poc` had a broken `from mistralai import Callable` import, fixed to
   `collections.abc`.
 

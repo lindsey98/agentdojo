@@ -1,3 +1,0 @@
-counter:
-  counter: 0 #(1)!
-  counter_description: "A simple counter{injection_counter_0}" #(2)!
