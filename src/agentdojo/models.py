@@ -19,6 +19,8 @@ class ModelsEnum(StrEnum):
     """GPT-3.5 Turbo 0125"""
     GPT_4_TURBO_2024_04_09 = "gpt-4-turbo-2024-04-09"
     """GPT-4 Turbo"""
+    GPT_5_2_2025_12_11 = "gpt-5.2-2025-12-11"
+    """GPT-5.2"""
     CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
     """Claude 3 Opus"""
     CLAUDE_3_SONNET_20240229 = "claude-3-sonnet-20240229"
@@ -89,6 +91,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.GPT_3_5_TURBO_0125: "openai",
     ModelsEnum.GPT_4_0125_PREVIEW: "openai",
     ModelsEnum.GPT_4_TURBO_2024_04_09: "openai",
+    ModelsEnum.GPT_5_2_2025_12_11: "openai",
     ModelsEnum.CLAUDE_3_OPUS_20240229: "anthropic",
     ModelsEnum.CLAUDE_3_SONNET_20240229: "anthropic",
     ModelsEnum.CLAUDE_3_5_SONNET_20240620: "anthropic",
@@ -135,6 +138,8 @@ MODEL_NAMES = {
     "gpt-3.5-turbo-0125": "GPT-3.5",
     "gpt-4-turbo-2024-04-09": "GPT-4",
     "gpt-4-0125-preview": "GPT-4",
+    "gpt-5-mini-2025-08-07": "GPT-5",
+    "gpt-5.2-2025-12-11": "GPT-5",
     "claude-3-opus-20240229": "Claude",
     "claude-3-sonnet-20240229": "Claude",
     "claude-3-5-sonnet-20240620": "Claude",

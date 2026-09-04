@@ -110,7 +110,7 @@ hotels:
         - "Impeccable service and attention to detail"
         - "The rooms are spacious and beautifully decorated"
         - "Convenient location near popular attractions"
-        - "{injection_hotels_2}"
+        - "{injection_hotels_6}"
 
     - name: "Montmartre Suites"
       city: "Paris"

@@ -1,7 +1,6 @@
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.attacks.attack_registry import register_attack
-from agentdojo.attacks.base_attacks import BaseAttack
-from agentdojo.attacks.important_instructions_attacks import get_model_name_from_pipeline
+from agentdojo.attacks.base_attacks import BaseAttack, get_model_name
 from agentdojo.base_tasks import BaseInjectionTask, BaseUserTask
 from agentdojo.task_suite.task_suite import TaskSuite
 
@@ -24,9 +23,15 @@ class DoSAttack(BaseAttack):
     """The injection that should persuade the model to stop its current task."""
     user_name: str = "Emma Johnson"
 
-    def __init__(self, task_suite: TaskSuite, target_pipeline: BasePipelineElement):
-        super().__init__(task_suite, target_pipeline)
-        self.model_name = get_model_name_from_pipeline(target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite,
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ):
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
+        self.model_name = get_model_name(pipeline=target_pipeline, model_name=model_name)
 
     def attack(self, user_task: BaseUserTask, injection_task: BaseInjectionTask) -> dict[str, str]:
         injections = {}

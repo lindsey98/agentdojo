@@ -43,6 +43,7 @@ from agentdojo.default_suites.v1.tools.travel_booking_client import (
 )
 from agentdojo.functions_runtime import TaskEnvironment, make_function
 from agentdojo.task_suite.task_suite import TaskSuite
+from langchain_core.tools import tool
 
 
 class TravelEnvironment(TaskEnvironment):
@@ -109,4 +110,9 @@ deepdiff_paths_to_exclude = [
 
 TravelDeepDiff = partial(DeepDiff, exclude_paths=deepdiff_paths_to_exclude)
 
-task_suite = TaskSuite[TravelEnvironment]("travel", TravelEnvironment, [make_function(tool) for tool in TOOLS])
+task_suite = TaskSuite[TravelEnvironment](
+    "travel",
+    TravelEnvironment,
+    tools=[make_function(func) for func in TOOLS],
+    langchain_tools=[tool(func) for func in TOOLS],
+)

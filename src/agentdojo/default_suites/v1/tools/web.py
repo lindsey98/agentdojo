@@ -3,6 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel
 
 from agentdojo.functions_runtime import Depends
+from langchain_core.tools import InjectedToolArg
 
 
 class Web(BaseModel):
@@ -10,7 +11,7 @@ class Web(BaseModel):
     web_requests: list[str]
 
 
-AnnotatedWeb = Annotated[Web, Depends("web")]
+AnnotatedWeb = Annotated[Web, Depends("web"), InjectedToolArg]
 
 
 def standardize_url(url):

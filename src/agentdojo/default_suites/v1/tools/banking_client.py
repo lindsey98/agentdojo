@@ -1,5 +1,6 @@
 from typing import Annotated
 
+from langchain_core.tools import InjectedToolArg
 from pydantic import BaseModel, Field
 
 from agentdojo.functions_runtime import Depends
@@ -25,7 +26,7 @@ class BankAccount(BaseModel):
 
 
 def next_id(
-    account: Annotated[BankAccount, Depends("bank_account")],
+    account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg],
 ) -> int:
     """Get the next ID for a transaction."""
     return (
@@ -37,23 +38,23 @@ def next_id(
     )
 
 
-def set_balance(account: Annotated[BankAccount, Depends("bank_account")], balance: float) -> None:
+def set_balance(account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg], balance: float) -> None:
     """Set the balance of the account."""
     account.balance = balance
 
 
-def set_iban(account: Annotated[BankAccount, Depends("bank_account")], iban: str) -> None:
+def set_iban(account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg], iban: str) -> None:
     """Set the IBAN of the account."""
     account.iban = iban
 
 
-def get_iban(account: Annotated[BankAccount, Depends("bank_account")]) -> str:
+def get_iban(account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg]) -> str:
     """Get the IBAN of the current bank account."""
     return account.iban
 
 
 def send_money(
-    account: Annotated[BankAccount, Depends("bank_account")], recipient: str, amount: float, subject: str, date: str
+    account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg], recipient: str, amount: float, subject: str, date: str
 ) -> dict[str, str]:
     """
     Sends a transaction to the recipient.
@@ -80,7 +81,7 @@ def send_money(
 
 
 def schedule_transaction(
-    account: Annotated[BankAccount, Depends("bank_account")],
+    account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg],
     recipient: str,
     amount: float,
     subject: str,
@@ -113,7 +114,7 @@ def schedule_transaction(
 
 
 def update_scheduled_transaction(
-    account: Annotated[BankAccount, Depends("bank_account")],
+    account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg],
     id: int,
     recipient: str | None = None,
     amount: float | None = None,
@@ -151,7 +152,7 @@ def update_scheduled_transaction(
     }
 
 
-def get_balance(account: Annotated[BankAccount, Depends("bank_account")]) -> float:
+def get_balance(account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg]) -> float:
     """
     Get the balance of the account.
     """
@@ -159,7 +160,7 @@ def get_balance(account: Annotated[BankAccount, Depends("bank_account")]) -> flo
 
 
 def get_most_recent_transactions(
-    account: Annotated[BankAccount, Depends("bank_account")], n: int = 100
+    account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg], n: int = 100
 ) -> list[Transaction]:
     """
     Get the list of the most recent transactions, e.g. to summarize the last n transactions.
@@ -170,7 +171,7 @@ def get_most_recent_transactions(
 
 
 def get_scheduled_transactions(
-    account: Annotated[BankAccount, Depends("bank_account")],
+    account: Annotated[BankAccount, Depends("bank_account"), InjectedToolArg],
 ) -> list[Transaction]:
     """
     Get the list of scheduled transactions.

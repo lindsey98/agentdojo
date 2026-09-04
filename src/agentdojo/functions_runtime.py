@@ -88,7 +88,10 @@ class Function(BaseModel, Generic[P, T]):
 
 
 def _get_dependencies(function: Callable[P, T]) -> dict[str, Depends]:
-    arg_types = get_type_hints(function, include_extras=True)
+    # Get the function's module globals to ensure all types are available
+    import sys
+    globalns = sys.modules[function.__module__].__dict__
+    arg_types = get_type_hints(function, globalns=globalns, include_extras=True)
     dependencies: dict[str, Depends] = {}
     for arg_name, arg_type in arg_types.items():
         if get_origin(arg_type) is Annotated:
@@ -130,6 +133,10 @@ def make_function(function: Callable[P, T]) -> Function:
     if function_docs.long_description is not None:
         description = f"{description}\n{function_docs.long_description}"
 
+    # Get function's module globals for type hint resolution
+    import sys
+    globalns = sys.modules[function.__module__].__dict__
+
     return Function[P, T](
         name=function.__name__,
         description=description.replace("None", "null"),
@@ -137,7 +144,7 @@ def make_function(function: Callable[P, T]) -> Function:
         run=function,
         dependencies=dependencies,
         full_docstring=function.__doc__,
-        return_type=get_type_hints(function).get("return"),
+        return_type=get_type_hints(function, globalns=globalns).get("return"),
     )
 
 

@@ -7,6 +7,7 @@ from agentdojo.attacks.base_attacks import (
     DEFAULT_MODEL_NAME,
     DEFAULT_USER_NAME,
     FixedJailbreakAttack,
+    get_model_name,
     get_model_name_from_pipeline,
 )
 from agentdojo.base_tasks import BaseInjectionTask, BaseUserTask
@@ -19,6 +20,17 @@ def get_wrong_model_name_from_pipeline(pipeline: BasePipelineElement) -> str:
     prng = random.Random(0)
     model_name = get_model_name_from_pipeline(pipeline)
     wrong_model_names = [name for name in MODEL_NAMES.values() if name != model_name]
+    return prng.choice(wrong_model_names)
+
+
+def get_wrong_model_name(
+    pipeline: BasePipelineElement | None = None,
+    model_name: str | None = None,
+) -> str:
+    """Get a wrong model name for testing attack robustness."""
+    prng = random.Random(0)
+    actual_model_name = get_model_name(pipeline=pipeline, model_name=model_name)
+    wrong_model_names = [name for name in MODEL_NAMES.values() if name != actual_model_name]
     return prng.choice(wrong_model_names)
 
 
@@ -37,18 +49,30 @@ class ImportantInstructionsAttack(FixedJailbreakAttack):
     )
     name = "important_instructions"
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(self._JB_STRING, task_suite, target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(self._JB_STRING, task_suite, target_pipeline, model_name=model_name)
         self.user_name = "Emma Johnson"
-        self.model_name = get_model_name_from_pipeline(target_pipeline)
+        self.model_name = get_model_name(pipeline=target_pipeline, model_name=model_name)
 
 
 @register_attack
 class ImportantInstructionsAttackNoUserName(ImportantInstructionsAttack):
     name = "important_instructions_no_user_name"
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
         self.user_name = DEFAULT_USER_NAME
 
 
@@ -56,8 +80,14 @@ class ImportantInstructionsAttackNoUserName(ImportantInstructionsAttack):
 class ImportantInstructionsAttackNoModelName(ImportantInstructionsAttack):
     name = "important_instructions_no_model_name"
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
         self.model_name = DEFAULT_MODEL_NAME
 
 
@@ -65,8 +95,14 @@ class ImportantInstructionsAttackNoModelName(ImportantInstructionsAttack):
 class ImportantInstructionsAttackNoNames(ImportantInstructionsAttack):
     name = "important_instructions_no_names"
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
         self.model_name = DEFAULT_MODEL_NAME
         self.user_name = DEFAULT_USER_NAME
 
@@ -75,17 +111,29 @@ class ImportantInstructionsAttackNoNames(ImportantInstructionsAttack):
 class ImportantInstructionsWrongModelName(ImportantInstructionsAttack):
     name = "important_instructions_wrong_model_name"
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
-        self.model_name = get_wrong_model_name_from_pipeline(target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
+        self.model_name = get_wrong_model_name(pipeline=target_pipeline, model_name=model_name)
 
 
 @register_attack
 class ImportantInstructionsWrongUserName(ImportantInstructionsAttack):
     name = "important_instructions_wrong_user_name"
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
         self.user_name = "Mark Smith"
 
 
@@ -105,10 +153,16 @@ class ToolKnowledgeAttack(ImportantInstructionsAttack):
         "</INFORMATION>\n"
     )
 
-    def __init__(self, task_suite: TaskSuite[Env], target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
+    def __init__(
+        self,
+        task_suite: TaskSuite[Env],
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
         self.user_name = "Emma Johnson"
-        self.model_name = get_model_name_from_pipeline(target_pipeline)
+        self.model_name = get_model_name(pipeline=target_pipeline, model_name=model_name)
 
     @lru_cache
     def get_tools_sequence(self, injection_task: BaseInjectionTask) -> str:

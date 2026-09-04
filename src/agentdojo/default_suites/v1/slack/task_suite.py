@@ -13,6 +13,7 @@ from agentdojo.default_suites.v1.tools.slack import (
 from agentdojo.default_suites.v1.tools.web import Web, get_webpage, post_webpage
 from agentdojo.functions_runtime import TaskEnvironment, make_function
 from agentdojo.task_suite.task_suite import TaskSuite
+from langchain_core.tools import tool
 
 
 class SlackEnvironment(TaskEnvironment):
@@ -34,4 +35,9 @@ TOOLS = [
     post_webpage,
 ]
 
-task_suite = TaskSuite[SlackEnvironment]("slack", SlackEnvironment, [make_function(tool) for tool in TOOLS])
+task_suite = TaskSuite[SlackEnvironment](
+    "slack",
+    SlackEnvironment,
+    tools=[make_function(func) for func in TOOLS],
+    langchain_tools=[tool(func) for func in TOOLS],
+)

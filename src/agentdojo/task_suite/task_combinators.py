@@ -70,6 +70,23 @@ class TaskCombinator(Generic[TASK, ENV]):
 
         NewCombinedTask.__name__ = new_task_name
 
+        # Combine INJECTED_DATA_* and SECURITY_CHECKS_* attributes
+        for subcategory in ["SYNTACTIC", "SEMANTIC"]:
+            data_field = f"INJECTED_DATA_{subcategory}"
+            checks_field = f"SECURITY_CHECKS_{subcategory}"
+
+            data_1 = getattr(user_task_1, data_field, [])
+            data_2 = getattr(user_task_2, data_field, [])
+            combined_data = data_1 + data_2
+            if combined_data:
+                setattr(NewCombinedTask, data_field, combined_data)
+
+            checks_1 = getattr(user_task_1, checks_field, [])
+            checks_2 = getattr(user_task_2, checks_field, [])
+            combined_checks = checks_1 + checks_2
+            if combined_checks:
+                setattr(NewCombinedTask, checks_field, combined_checks)
+
         def utility_from_traces(
             self,
             model_output: str,

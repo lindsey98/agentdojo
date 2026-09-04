@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from agentdojo.functions_runtime import Depends
 from agentdojo.strenum import StrEnum
-
+from langchain_core.tools import InjectedToolArg
 
 class ReservationType(StrEnum):
     HOTEL = "hotel"
@@ -101,7 +101,7 @@ class CarRental(BaseModel):
 # note: for user
 
 
-def get_user_information(user: Annotated[User, Depends("user")]) -> dict[str, str]:
+def get_user_information(user: Annotated[User, Depends("user"), InjectedToolArg]) -> dict[str, str]:
     """Get the user information, could be: first name, last name, ID number, email, phone number, address, passport number, bank account number, credit card number. These information are used for booking hotels, restaurants, car rentals, and flights."""
     return {
         "First Name": user.first_name,
@@ -119,7 +119,7 @@ def get_user_information(user: Annotated[User, Depends("user")]) -> dict[str, st
 # note: for hotel
 
 
-def get_all_hotels_in_city(hotels: Annotated[Hotels, Depends("hotels")], city: str) -> str:
+def get_all_hotels_in_city(hotels: Annotated[Hotels, Depends("hotels"), InjectedToolArg], city: str) -> str:
     """Get all hotels in the given city.
     :param city: The city to get hotels from.
     """
@@ -128,7 +128,7 @@ def get_all_hotels_in_city(hotels: Annotated[Hotels, Depends("hotels")], city: s
     return hotel_names
 
 
-def get_hotels_prices(hotels: Annotated[Hotels, Depends("hotels")], hotel_names: list[str]) -> dict[str, str]:
+def get_hotels_prices(hotels: Annotated[Hotels, Depends("hotels"), InjectedToolArg], hotel_names: list[str]) -> dict[str, str]:
     """Get all hotels within the given budget, should be within the price range.
     :param hotel_names: The name of the hotel to get the price range for.
     """
@@ -139,7 +139,7 @@ def get_hotels_prices(hotels: Annotated[Hotels, Depends("hotels")], hotel_names:
     }
 
 
-def get_hotels_address(hotels: Annotated[Hotels, Depends("hotels")], hotel_name: str) -> dict[str, str]:
+def get_hotels_address(hotels: Annotated[Hotels, Depends("hotels"), InjectedToolArg], hotel_name: str) -> dict[str, str]:
     """Get the address of the given hotel.
     :param hotel_name: The name of the hotel to get the address for.
     """
@@ -147,7 +147,7 @@ def get_hotels_address(hotels: Annotated[Hotels, Depends("hotels")], hotel_name:
 
 
 def get_rating_reviews_for_hotels(
-    hotels: Annotated[Hotels, Depends("hotels")],
+    hotels: Annotated[Hotels, Depends("hotels"), InjectedToolArg],
     hotel_names: list[str],
 ) -> dict[str, str]:
     """Get the rating and reviews for the given hotels.
@@ -163,7 +163,7 @@ def get_rating_reviews_for_hotels(
 # note: for restaurant
 
 
-def get_all_restaurants_in_city(restaurants: Annotated[Restaurants, Depends("restaurants")], city: str) -> str:
+def get_all_restaurants_in_city(restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg], city: str) -> str:
     """Get all restaurants in the given city.
     :param city: The city to get restaurants from.
     """
@@ -173,7 +173,7 @@ def get_all_restaurants_in_city(restaurants: Annotated[Restaurants, Depends("res
 
 
 def get_restaurants_address(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, str]:
     """Get the address of the given restaurants.
@@ -189,7 +189,7 @@ def get_restaurants_address(
 
 
 def get_rating_reviews_for_restaurants(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, str]:
     """Get the rating and reviews for the given restaurants.
@@ -203,7 +203,7 @@ def get_rating_reviews_for_restaurants(
 
 
 def get_cuisine_type_for_restaurants(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, str]:
     """Get the cuisine type of the given restaurants, could be: Italian, Chinese, Indian, Japanese.
@@ -217,7 +217,7 @@ def get_cuisine_type_for_restaurants(
 
 
 def get_dietary_restrictions_for_all_restaurants(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, str]:
     """Get the dietary restrictions of the given restaurants, could be: Vegetarian, Vegan, Gluten-free, Dairy-free.
@@ -232,7 +232,7 @@ def get_dietary_restrictions_for_all_restaurants(
 
 
 def get_contact_information_for_restaurants(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, str]:
     """Get the contact information of the given restaurants.
@@ -246,7 +246,7 @@ def get_contact_information_for_restaurants(
 
 
 def get_price_for_restaurants(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, float]:
     """Get the price per person of the given restaurants.
@@ -260,7 +260,7 @@ def get_price_for_restaurants(
 
 
 def check_restaurant_opening_hours(
-    restaurants: Annotated[Restaurants, Depends("restaurants")],
+    restaurants: Annotated[Restaurants, Depends("restaurants"), InjectedToolArg],
     restaurant_names: list[str],
 ) -> dict[str, str]:
     """Get the openning hours of the given restaurants, check if the restaurant is open.
@@ -276,7 +276,7 @@ def check_restaurant_opening_hours(
 # note: for car rental
 
 
-def get_all_car_rental_companies_in_city(car_rental: Annotated[CarRental, Depends("car_rental")], city: str) -> str:
+def get_all_car_rental_companies_in_city(car_rental: Annotated[CarRental, Depends("car_rental"), InjectedToolArg], city: str) -> str:
     """Get all car rental companies in the given city.
     :param city: The city to get car rental companies from.
     """
@@ -286,7 +286,7 @@ def get_all_car_rental_companies_in_city(car_rental: Annotated[CarRental, Depend
 
 
 def get_car_types_available(
-    car_rental: Annotated[CarRental, Depends("car_rental")], company_name: list[str]
+    car_rental: Annotated[CarRental, Depends("car_rental"), InjectedToolArg], company_name: list[str]
 ) -> dict[str, list]:
     """Get the car types available for the given car rental companies.
     :param company_name: The name of the car rental company to get the car types available for.
@@ -297,7 +297,7 @@ def get_car_types_available(
 
 
 def get_rating_reviews_for_car_rental(
-    car_rental: Annotated[CarRental, Depends("car_rental")], company_name: list[str]
+    car_rental: Annotated[CarRental, Depends("car_rental"), InjectedToolArg], company_name: list[str]
 ) -> dict[str, str]:
     """Get the rating and reviews for the given car rental companies.
     :param company_name: The name of the car rental company to get reviews for.
@@ -310,7 +310,7 @@ def get_rating_reviews_for_car_rental(
 
 
 def get_car_rental_address(
-    car_rental: Annotated[CarRental, Depends("car_rental")], company_name: list[str]
+    car_rental: Annotated[CarRental, Depends("car_rental"), InjectedToolArg], company_name: list[str]
 ) -> dict[str, str]:
     """Get the address of the given car rental companies.
     :param company_name: The name of the car rental company to get the address for.
@@ -319,7 +319,7 @@ def get_car_rental_address(
 
 
 def get_car_fuel_options(
-    car_rental: Annotated[CarRental, Depends("car_rental")], company_name: list[str]
+    car_rental: Annotated[CarRental, Depends("car_rental"), InjectedToolArg], company_name: list[str]
 ) -> dict[str, list]:
     """Get the fuel options of the given car rental companies.
     :param company_name: The name of the car rental company to get the fuel options for.
@@ -328,7 +328,7 @@ def get_car_fuel_options(
 
 
 def get_car_price_per_day(
-    car_rental: Annotated[CarRental, Depends("car_rental")], company_name: list[str]
+    car_rental: Annotated[CarRental, Depends("car_rental"), InjectedToolArg], company_name: list[str]
 ) -> dict[str, float]:
     """Get the price per day of the given car rental companies.
     :param company_name: The name of the car rental company to get the price per day for.
@@ -337,8 +337,8 @@ def get_car_price_per_day(
 
 
 def reserve_hotel(
-    reservation: Annotated[Reservation, Depends("reservation")],
-    user: Annotated[User, Depends("user")],
+    reservation: Annotated[Reservation, Depends("reservation"), InjectedToolArg],
+    user: Annotated[User, Depends("user"), InjectedToolArg],
     hotel: str,
     start_day: str,
     end_day: str,
@@ -357,8 +357,8 @@ def reserve_hotel(
 
 
 def reserve_restaurant(
-    reservation: Annotated[Reservation, Depends("reservation")],
-    user: Annotated[User, Depends("user")],
+    reservation: Annotated[Reservation, Depends("reservation"), InjectedToolArg],
+    user: Annotated[User, Depends("user"), InjectedToolArg],
     restaurant: str,
     start_time: str,
 ) -> str:
@@ -380,8 +380,8 @@ def reserve_restaurant(
 
 
 def reserve_car_rental(
-    reservation: Annotated[Reservation, Depends("reservation")],
-    user: Annotated[User, Depends("user")],
+    reservation: Annotated[Reservation, Depends("reservation"), InjectedToolArg],
+    user: Annotated[User, Depends("user"), InjectedToolArg],
     company: str,
     start_time: str,
     end_time: str | None,
@@ -401,7 +401,7 @@ def reserve_car_rental(
 
 
 def get_flight_information(
-    flights: Annotated[Flights, Depends("flights")],
+    flights: Annotated[Flights, Depends("flights"), InjectedToolArg],
     departure_city: str,
     arrival_city: str,
 ) -> str:

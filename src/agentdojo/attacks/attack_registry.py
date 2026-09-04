@@ -37,7 +37,13 @@ def register_attack(attack: type[A]) -> type[A]:
     return attack
 
 
-def load_attack(attack_name: str, task_suite: TaskSuite, target_pipeline: BasePipelineElement) -> BaseAttack:
+def load_attack(
+    attack_name: str,
+    task_suite: TaskSuite,
+    target_pipeline: BasePipelineElement | None = None,
+    *,
+    model_name: str | None = None,
+) -> BaseAttack:
     """Gets and instantiates an attack from the registry.
 
     To use your own attack, you must first register it using the [`register_attack`][agentdojo.attacks.attack_registry.register_attack] function.
@@ -45,6 +51,12 @@ def load_attack(attack_name: str, task_suite: TaskSuite, target_pipeline: BasePi
     Args:
         attack_name: The name of the attack to load.
         task_suite: The task suite to use for the attack.
-        target_pipeline: The target pipeline to attack.
+        target_pipeline: The target pipeline to attack (for pipeline agents).
+        model_name: The model name string (for LangGraph agents).
+
+    Note:
+        Either target_pipeline or model_name should be provided.
+        For pipeline agents, use target_pipeline.
+        For LangGraph agents, use model_name.
     """
-    return ATTACKS[attack_name](task_suite, target_pipeline)
+    return ATTACKS[attack_name](task_suite, target_pipeline, model_name=model_name)
