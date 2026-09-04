@@ -9,7 +9,7 @@ into one pip-installable package, so downstream defense repos can depend on a si
 |---|---|---|
 | AgentDojo v0.1.35 | [ethz-spylab/agentdojo](https://github.com/ethz-spylab/agentdojo) | Base framework, suites v1–v1.2.2 (workspace, banking, slack, travel) |
 | AgentDyn | [SaFo-Lab/AgentDyn](https://github.com/SaFo-Lab/AgentDyn) ([paper](https://arxiv.org/pdf/2602.03117)) | `shopping`, `github`, `dailylife` dynamic suites; PIGuard / PromptGuard2 detectors; CaMeL / Progent / DRIFT defense integrations under `src/agentdojo/defenses/` |
-| ADI | [compsec-snu/adi](https://github.com/compsec-snu/adi) | Agent Data Injection attacks (`data_only_syntactic`, `data_only_semantic`), LangGraph agent loading (`--agent`), nine ported defenses under `agents/`, `camel_bypass_poc` suite |
+| ADI | [compsec-snu/adi](https://github.com/compsec-snu/adi) | Agent Data Injection attacks (`data_only_syntactic`, `data_only_semantic`), LangGraph agent loading (`--agent`; agent implementations not vendored — point the loader at your own `agents/` dir or see the ADI repo), `camel_bypass_poc` suite |
 | ChatInject | [hwanchang00/ChatInject](https://github.com/hwanchang00/ChatInject) | Chat-template role-confusion attacks (`chat_inject_qwen3`, `chat_inject_glm`, multi-turn `*_with_utility_*` variants with pre-generated dialogues) |
 | Cascade | [arXiv:2510.05244](https://arxiv.org/abs/2510.05244) | Stage-2 semantic-template attacks (`cascade_user_note`, `cascade_task_queue`, `cascade_safe_tags`, `cascade_decoy_safe_tags`, `cascade_skip_directive`, `cascade_triple_layer`, `cascade_decoy_system_update`) and the Stage-3 adaptive attack (`cascade_adaptive`) |
 
@@ -20,8 +20,6 @@ pip install git+https://github.com/lindsey98/agentdojo.git
 # or, for development:
 git clone https://github.com/lindsey98/agentdojo.git && pip install -e agentdojo
 ```
-
-The LlamaFirewall-based ADI agent needs the extra: `pip install "agentdojo[adi] @ git+..."`.
 
 ## Quick start
 
@@ -34,9 +32,9 @@ python -m agentdojo.scripts.benchmark -s banking \
 python -m agentdojo.scripts.benchmark -s shopping -s github -s dailylife \
     --model GPT_4O_2024_08_06 --attack important_instructions
 
-# ADI data-only injection with a ported defense agent
-python -m agentdojo.scripts.benchmark --agent baseline --model gpt-4o-mini \
-    --attack data_only_syntactic -s workspace
+# ADI data-only injection (ADI's INJECTED_DATA covers the v1 suites)
+python -m agentdojo.scripts.benchmark --benchmark-version v1 -s workspace \
+    --model GPT_4O_MINI_2024_07_18 --attack data_only_syntactic
 
 # ChatInject (template-only; multi-turn variants cover banking/slack/travel GOALs)
 python -m agentdojo.scripts.benchmark -s banking --model LOCAL --model-id Qwen/Qwen3-32B \
@@ -69,7 +67,9 @@ Notes:
 - Base: upstream tag `v0.1.35`; AgentDyn and ADI imported as branches and merged.
 - ADI's executor abstraction is kept, with AgentDyn's slash-sanitized log names
   (`executor_name.replace("/", "_")`) and AgentDyn's `PipelineConfig(suite_name=...)`.
-- `llamafirewall` moved from a hard dependency to the `[adi]` extra.
+- ADI's `agents/` defense implementations are not vendored (plain agentdojo package only);
+  the `--agent` loader remains and can be pointed at an external agents directory.
+- ADI's `llamafirewall` hard dependency was dropped (nothing in the package imports it).
 - ADI's `camel_bypass_poc` had a broken `from mistralai import Callable` import, fixed to
   `collections.abc`.
 
