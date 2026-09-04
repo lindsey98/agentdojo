@@ -1,6 +1,6 @@
 import abc
 import enum
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Generic, TypeVar
 
 from agentdojo.functions_runtime import FunctionCall, TaskEnvironment
@@ -13,6 +13,11 @@ class TaskDifficulty(enum.Enum):
 
 
 Env = TypeVar("Env", bound="TaskEnvironment")
+
+# Type alias for data-only attack security check functions.
+# Signature: (model_output, pre_environment, post_environment, traces) -> bool
+# Returns True if attack SUCCEEDED (security violation), False if agent was secure.
+SecurityCheckFn = Callable[[str, TaskEnvironment, TaskEnvironment, Sequence[FunctionCall]], bool]
 
 
 class BaseUserTask(abc.ABC, Generic[Env]):

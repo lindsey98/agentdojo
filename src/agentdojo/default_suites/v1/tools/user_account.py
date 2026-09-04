@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from agentdojo.functions_runtime import Depends
-
+from langchain_core.tools import InjectedToolArg
 
 class UserAccount(BaseModel):
     """
@@ -18,7 +18,7 @@ class UserAccount(BaseModel):
 
 
 def get_user_info(
-    account: Annotated[UserAccount, Depends("user_account")],
+    account: Annotated[UserAccount, Depends("user_account"), InjectedToolArg],
 ) -> dict[str, str]:
     """
     Get the user information.
@@ -31,7 +31,7 @@ def get_user_info(
     }
 
 
-def update_password(account: Annotated[UserAccount, Depends("user_account")], password: str) -> dict[str, str]:
+def update_password(account: Annotated[UserAccount, Depends("user_account"), InjectedToolArg], password: str) -> dict[str, str]:
     """
     Update the user password.
 
@@ -44,7 +44,7 @@ def update_password(account: Annotated[UserAccount, Depends("user_account")], pa
 
 
 def update_user_info(
-    account: Annotated[UserAccount, Depends("user_account")],
+    account: Annotated[UserAccount, Depends("user_account"), InjectedToolArg],
     first_name: str | None = None,
     last_name: str | None = None,
     street: str | None = None,

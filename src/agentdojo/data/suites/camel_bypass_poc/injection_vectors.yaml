@@ -1,0 +1,3 @@
+injection_vector:
+  description: "injection vector inside attacker's email body"
+  default: ""

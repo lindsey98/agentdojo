@@ -119,12 +119,15 @@ class OutputLogger(Logger):
                 if "error" in message and message["error"] is not None:
                     content = f"[red]{message['error']}[/red]"
                 if "tool_call" in message:
-                    role = f"{role} [bold]{message['tool_call'].function}[/bold]"
+                    try:
+                        role = f"{role} [bold]{message['tool_call'].function}[/bold]"
+                    except AttributeError:
+                        role = f"{role} [bold]{message['tool_call'].get('name')}[/bold]"
                 role = tool(role)
             else:
                 role = system(role)
             if self.live is None:
-                logging_content = textwrap.shorten(f"{content}{tool_calls_content}", width=100, placeholder="[...]")
+                logging_content = textwrap.shorten(f"{content}{tool_calls_content}", width=10000, placeholder="[...]")
                 if injection_task_id is not None:
                     current_task_id = rf"\[{user_task_id}]\[{injection_task_id}]"
                 else:

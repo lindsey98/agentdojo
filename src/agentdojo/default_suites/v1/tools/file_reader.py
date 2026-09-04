@@ -3,13 +3,14 @@ from typing import Annotated
 from pydantic import BaseModel
 
 from agentdojo.functions_runtime import Depends
+from langchain_core.tools import InjectedToolArg
 
 
 class Filesystem(BaseModel):
     files: dict[str, str]
 
 
-def read_file(filesystem: Annotated[Filesystem, Depends("filesystem")], file_path: str) -> str:
+def read_file(filesystem: Annotated[Filesystem, Depends("filesystem"), InjectedToolArg], file_path: str) -> str:
     """
     Reads the contents of the file at the given path.
 

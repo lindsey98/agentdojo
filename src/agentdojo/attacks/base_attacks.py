@@ -27,7 +27,8 @@ class BaseAttack(abc.ABC):
 
     Args:
         task_suite: The task suite with the user and injection tasks being used for the benchmark.
-        target_pipeline: The target pipeline that is attacked.
+        target_pipeline: The target pipeline that is attacked (optional for LangGraph agents).
+        model_name: The model name for LangGraph agents (optional for pipeline agents).
 
     """
 
@@ -35,12 +36,23 @@ class BaseAttack(abc.ABC):
     """Whether the attack is a DOS attack. If `True`, then the benchmarking
     will be done with only one injection task."""
 
+    is_data_injection: bool = False
+    """Whether the attack is a data injection attack. If `True`, the benchmark
+    will iterate over INJECTED_DATA entries and use SECURITY_CHECKS functions for security check."""
+
     name: str
     """The name of the attack."""
 
-    def __init__(self, task_suite: TaskSuite, target_pipeline: BasePipelineElement) -> None:
+    def __init__(
+        self,
+        task_suite: TaskSuite,
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
         self.task_suite = task_suite
         self.target_pipeline = target_pipeline
+        self._model_name = model_name
         injection_defaults = task_suite.get_injection_vector_defaults()
         self.canary_injections = {inj: f"<CANARY---{inj}--->" for inj in injection_defaults}
         # TODO: add cache directory to save the attacks that are expensive to compute
@@ -106,8 +118,15 @@ class FixedJailbreakAttack(BaseAttack):
     model_name: str = DEFAULT_MODEL_NAME
     """The name of the model. This will be substituted in the jailbreak string to the `{model}` placeholder if present in the string."""
 
-    def __init__(self, jailbreak: str, task_suite: TaskSuite, target_pipeline: BasePipelineElement) -> None:
-        super().__init__(task_suite, target_pipeline)
+    def __init__(
+        self,
+        jailbreak: str,
+        task_suite: TaskSuite,
+        target_pipeline: BasePipelineElement | None = None,
+        *,
+        model_name: str | None = None,
+    ) -> None:
+        super().__init__(task_suite, target_pipeline, model_name=model_name)
         self.jailbreak = jailbreak
 
     def summarize_task(self, task: BaseUserTask) -> str:
@@ -145,3 +164,37 @@ def get_model_name_from_pipeline(pipeline: BasePipelineElement) -> str:
     raise ValueError(
         f"No valid model name not found in pipeline name `{pipeline.name}`. Valid model names are {sorted(set(MODEL_NAMES.values()))}"
     )
+
+
+def get_model_name(
+    pipeline: BasePipelineElement | None = None,
+    model_name: str | None = None,
+) -> str:
+    """Gets the model name (in prose) from either a pipeline or a direct model_name string.
+
+    This function supports both pipeline-based agents (legacy) and LangGraph agents.
+    For LangGraph agents, the model_name is passed directly.
+
+    Args:
+        pipeline: The pipeline from which to extract the name (for pipeline agents).
+        model_name: Direct model name string (for LangGraph agents).
+
+    Returns:
+        Human-readable model name (e.g., "GPT-4", "Claude").
+
+    Raises:
+        ValueError: If neither pipeline nor model_name is provided.
+    """
+    # If direct model_name is provided, use it
+    if model_name is not None:
+        for full_name, display_name in MODEL_NAMES.items():
+            if full_name in model_name:
+                return display_name
+        # Return default if model not in MODEL_NAMES
+        return DEFAULT_MODEL_NAME
+
+    # Fall back to pipeline-based extraction
+    if pipeline is not None:
+        return get_model_name_from_pipeline(pipeline)
+
+    raise ValueError("Either pipeline or model_name must be provided")

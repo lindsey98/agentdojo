@@ -663,6 +663,6 @@ initial_files:
     owner: emma.johnson@bluesparrowtech.com
     shared_with:
       david.lee@bluesparrowtech.com: "rw"
-      linda.green@luesparrowtech.com: "rw"
-      mark.roberts@luesparrowtech.com: "rw"
+      linda.green@bluesparrowtech.com: "rw"
+      mark.roberts@bluesparrowtech.com: "rw"
     last_modified: "2024-05-06T10:30:00"

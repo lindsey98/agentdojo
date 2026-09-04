@@ -1,7 +1,7 @@
 from ast import literal_eval
 from collections.abc import Callable, Sequence
+import json
 
-import yaml
 from pydantic import BaseModel
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
@@ -20,12 +20,13 @@ def is_string_list(s: str):
 
 
 def tool_result_to_str(
-    tool_result: FunctionReturnType, dump_fn: Callable[[dict | list[dict]], str] = yaml.safe_dump
+    tool_result: FunctionReturnType, dump_fn: Callable[[dict | list[dict]], str] = json.dumps
 ) -> str:
-    """Basic tool output formatter with YAML dump by default. Could work with `json.dumps` as
+    """Basic tool output formatter with JSON dump by default. Could work with `yaml.safe_dump` as
     `dump_fn`."""
     if isinstance(tool_result, BaseModel):
-        return dump_fn(tool_result.model_dump()).strip()
+        # Use mode='json' to convert datetime objects to ISO strings
+        return dump_fn(tool_result.model_dump(mode='json')).strip()
 
     if isinstance(tool_result, list):
         res_items = []
@@ -33,12 +34,16 @@ def tool_result_to_str(
             if type(item) in [str, int]:
                 res_items += [str(item)]
             elif isinstance(item, BaseModel):
-                res_items += [item.model_dump()]
+                # Use mode='json' to convert datetime objects to ISO strings
+                res_items += [item.model_dump(mode='json')]
             else:
                 raise TypeError("Not valid type for item tool result: " + str(type(item)))
 
         # If type checking passes, this is guaranteed to be a list of BaseModel
         return dump_fn(res_items).strip()
+
+    if isinstance(tool_result, dict):
+        return dump_fn(tool_result).strip()
 
     return str(tool_result)
 

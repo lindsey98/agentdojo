@@ -3,6 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from agentdojo.functions_runtime import Depends
+from langchain_core.tools import InjectedToolArg
 
 
 class Message(BaseModel):
@@ -19,7 +20,7 @@ class Slack(BaseModel):
     channel_inbox: dict[str, list[Message]] = Field(..., title="Inbox of each channel")
 
 
-AnnotatedSlack = Annotated[Slack, Depends("slack")]
+AnnotatedSlack = Annotated[Slack, Depends("slack"), InjectedToolArg]
 
 
 def get_channels(slack: AnnotatedSlack) -> list[str]:

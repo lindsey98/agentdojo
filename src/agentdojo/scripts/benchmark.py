@@ -13,6 +13,8 @@ from rich.live import Live
 from rich.logging import RichHandler
 
 from agentdojo.agent_pipeline.agent_pipeline import DEFENSES, AgentPipeline, PipelineConfig
+from agentdojo.agents import AgentMode, load_agent
+from agentdojo.agents.base_agent import LangGraphAgent
 from agentdojo.attacks.attack_registry import ATTACKS, load_attack
 from agentdojo.benchmark import SuiteResults, benchmark_suite_with_injections, benchmark_suite_without_injections
 from agentdojo.logging import OutputLogger
@@ -37,44 +39,97 @@ def benchmark_suite(
     system_message: str | None = None,
     live: Live | None = None,
     tool_output_format: Literal["yaml", "json"] | None = None,
+    agent: str | None = None,
 ) -> SuiteResults:
     if not load_dotenv(".env"):
         warnings.warn("No .env file found")
 
     print(f"Running benchmark for suite: '{suite.name}'")
-    print(f"Using model: '{model}'")
+
+    # Dual-path agent loading
+    if agent is not None:
+        # NEW PATH: Load agent from agent loader
+        print(f"Using agent: '{agent}'")
+        loaded_agent = load_agent(
+            agent,
+            model=model,
+            tools=suite.tools,                      # Function objects for Pipeline
+            langchain_tools=suite.langchain_tools,  # BaseTool objects for LangGraph
+            suite_name=suite.name                   # Pass suite name for suite-specific policies
+        )
+
+        # Extract executor and mode based on agent type
+        if isinstance(loaded_agent, LangGraphAgent):
+            executor = loaded_agent.get_graph()
+            mode = AgentMode.LANGGRAPH
+            graph_factory = loaded_agent.get_graph_factory()  # Extract graph factory for environment binding
+            # For backward compatibility with legacy positional parameter
+            pipeline = None  # LangGraph agents don't have pipelines
+            # Extract name for logging (agent_name + model_name)
+            executor_name = f"{loaded_agent.name}_{loaded_agent.get_model_name()}"
+            # Load system message for LangGraph agents (AgentPipeline handles this internally)
+            if system_message is None:
+                from agentdojo.agent_pipeline.agent_pipeline import load_system_message
+                system_message = load_system_message(system_message_name)
+        else:  # PipelineAgent
+            executor = loaded_agent.get_pipeline()
+            mode = AgentMode.PIPELINE
+            pipeline = executor
+            graph_factory = None  # Pipeline agents don't use graph factories
+            executor_name = None  # Pipeline sets its own name
+
+    else:
+        # LEGACY PATH: Create pipeline from config
+        print(f"Using model: '{model}'")
+        if defense is not None:
+            print(f"Using defense: '{defense}'")
+
+        pipeline = AgentPipeline.from_config(
+            PipelineConfig(
+                llm=model,
+                model_id=model_id,
+                defense=defense,
+                tool_delimiter=tool_delimiter,
+                system_message_name=system_message_name,
+                system_message=system_message,
+                tool_output_format=tool_output_format,
+            )
+        )
+        executor = pipeline
+        mode = AgentMode.PIPELINE
+        graph_factory = None  # Legacy pipeline path doesn't use graph factories
+        executor_name = None  # Pipeline sets its own name
+
     if attack is not None:
         print(f"Using attack: '{attack}'")
-    if defense is not None:
-        print(f"Using defense: '{defense}'")
     if len(user_tasks) > 0:
         print(f"Using user tasks: {', '.join(user_tasks)}")
-
-    pipeline = AgentPipeline.from_config(
-        PipelineConfig(
-            llm=model,
-            model_id=model_id,
-            defense=defense,
-            tool_delimiter=tool_delimiter,
-            system_message_name=system_message_name,
-            system_message=system_message,
-            tool_output_format=tool_output_format,
-        )
-    )
     with OutputLogger(str(logdir), live=live):
         if attack is None:
             results = benchmark_suite_without_injections(
-                pipeline,
+                pipeline if pipeline is not None else executor,  # Legacy positional
                 suite,
                 user_tasks=user_tasks if len(user_tasks) != 0 else None,
                 logdir=logdir,
                 force_rerun=force_rerun,
                 benchmark_version=benchmark_version,
+                executor=executor,  # Mode-aware parameter
+                mode=mode,
+                graph_factory=graph_factory,  # Pass graph factory for environment binding
+                system_message=system_message,  # Pass system message for LangGraph agents
+                executor_name=executor_name,  # Pass executor name for logging
             )
         else:
-            attacker_ = load_attack(attack, suite, pipeline)
+            # Load attack with model name for LangGraph agents
+            if mode == AgentMode.LANGGRAPH:
+                # Get model_name from the LangGraphAgent
+                agent_model_name = loaded_agent.get_model_name() if hasattr(loaded_agent, 'get_model_name') else str(model)
+                attacker_ = load_attack(attack, suite, model_name=agent_model_name)
+            else:
+                attacker_ = load_attack(attack, suite, pipeline)
+
             results = benchmark_suite_with_injections(
-                pipeline,
+                pipeline if pipeline is not None else executor,  # Legacy positional
                 suite,
                 attacker_,
                 user_tasks=user_tasks if len(user_tasks) != 0 else None,
@@ -82,17 +137,27 @@ def benchmark_suite(
                 logdir=logdir,
                 force_rerun=force_rerun,
                 benchmark_version=benchmark_version,
+                executor=executor,  # Mode-aware parameter
+                mode=mode,
+                graph_factory=graph_factory,  # Pass graph factory for environment binding
+                system_message=system_message,  # Pass system message for LangGraph agents
+                executor_name=executor_name,  # Pass executor name for logging
             )
+
     print(f"Finished benchmark for suite: '{suite.name}'")
 
     return results
 
 
 def show_results(suite_name: str, results: SuiteResults, show_security_results: bool):
-    utility_results = results["utility_results"].values()
-    avg_utility = sum(utility_results) / len(utility_results)
+    utility_results = list(results["utility_results"].values())
 
     print(f"Results for suite {suite_name}")
+    if len(utility_results) == 0:
+        print("No test cases were run. Check your -ut and -it filters.")
+        return
+
+    avg_utility = sum(utility_results) / len(utility_results)
     print(f"Average utility: {avg_utility * 100:.2f}%")
 
     if show_security_results:
@@ -100,7 +165,10 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
         total_injection_tasks = len(results["injection_tasks_utility_results"])
         print(f"\nPassed injection tasks as user tasks: {passed_injection_tasks}/{total_injection_tasks}")
 
-        security_results = results["security_results"].values()
+        security_results = list(results["security_results"].values())
+        if len(security_results) == 0:
+            print("No security results.")
+            return
         avg_security = sum(security_results) / len(security_results)
         print(f"Average security: {avg_security * 100:.2f}%")
 
@@ -208,6 +276,13 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
     default=tuple(),
     help="The modules to load before running the benchmark. Useful for registering custom attacks, defenses, or suites.",
 )
+@click.option(
+    "--agent",
+    type=str,
+    default=None,
+    help="Agent name to load from agents/ directory. If not provided, "
+         "creates pipeline from --model and --defense options.",
+)
 def main(
     suites: tuple[str, ...],
     model: ModelsEnum,
@@ -224,9 +299,17 @@ def main(
     max_workers: int = 1,
     force_rerun: bool = False,
     modules_to_load: tuple[str, ...] = (),
+    agent: str | None = None,
 ):
     for module in modules_to_load:
         importlib.import_module(module)
+
+    # Warn about ignored options when using --agent
+    if agent is not None and defense is not None:
+        warnings.warn(
+            f"--defense '{defense}' is ignored when --agent is specified. "
+            f"The agent '{agent}' will use its own configuration."
+        )
 
     if len(suites) == 0:
         suites = tuple(get_suites(benchmark_version).keys())
@@ -245,7 +328,8 @@ def main(
                 suite,
                 model,
                 logdir,
-                benchmark_version=benchmark_version,
+                force_rerun,
+                benchmark_version,
                 user_tasks=user_tasks,
                 injection_tasks=injection_tasks,
                 model_id=model_id,
@@ -254,7 +338,7 @@ def main(
                 tool_delimiter=tool_delimiter,
                 system_message_name=system_message_name,
                 system_message=system_message,
-                force_rerun=force_rerun,
+                agent=agent,
             )
         combined_results = SuiteResults(utility_results={}, security_results={}, injection_tasks_utility_results={})
         for suite_name, result in results.items():
@@ -291,6 +375,7 @@ def main(
             repeat(system_message_name),
             repeat(system_message),
             repeat(force_rerun),
+            repeat(agent),
         )
         results = p.starmap(benchmark_suite, arguments)
 

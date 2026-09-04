@@ -6,7 +6,7 @@ from typing_extensions import Self
 
 from agentdojo.default_suites.v1.tools.types import CalendarEvent, CloudDriveFileID, Email, EmailID, EmailStatus
 from agentdojo.functions_runtime import Depends
-
+from langchain_core.tools import InjectedToolArg
 
 class EmailContact(BaseModel):
     email: EmailStr
@@ -145,14 +145,14 @@ class Inbox(BaseModel):
         return max(self.received, key=lambda email: email.timestamp)
 
 
-def get_unread_emails(inbox: Annotated[Inbox, Depends("inbox")]) -> list[Email]:
+def get_unread_emails(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg]) -> list[Email]:
     """Returns all the unread emails in the inbox. Each email has a sender, a subject, and a body.
     The emails are marked as read after this function is called."""
     return inbox.get_unread()
 
 
 def send_email(
-    inbox: Annotated[Inbox, Depends("inbox")],
+    inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg],
     recipients: list[str],
     subject: str,
     body: str,
@@ -194,7 +194,7 @@ def send_email(
 
 
 def search_emails(
-    inbox: Annotated[Inbox, Depends("inbox")],
+    inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg],
     query: str,
     sender: str | None = None,
 ) -> list[Email]:
@@ -211,7 +211,7 @@ def search_emails(
     return matches
 
 
-def delete_email(inbox: Annotated[Inbox, Depends("inbox")], email_id: str) -> str:
+def delete_email(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg], email_id: str) -> str:
     """Deletes the email with the given `email_id` from the inbox.
 
     :param email_id: The id of the email to delete.
@@ -220,22 +220,22 @@ def delete_email(inbox: Annotated[Inbox, Depends("inbox")], email_id: str) -> st
     return f"Email with id {email_id} deleted successfully."
 
 
-def get_sent_emails(inbox: Annotated[Inbox, Depends("inbox")]) -> list[Email]:
+def get_sent_emails(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg]) -> list[Email]:
     """Returns all the sent emails in the inbox. Each email has a recipient, a subject, and a body."""
     return inbox.sent
 
 
-def get_received_emails(inbox: Annotated[Inbox, Depends("inbox")]) -> list[Email]:
+def get_received_emails(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg]) -> list[Email]:
     """Returns all the received emails in the inbox. Each email has a sender, a subject, and a body."""
     return inbox.received
 
 
-def get_draft_emails(inbox: Annotated[Inbox, Depends("inbox")]) -> list[Email]:
+def get_draft_emails(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg]) -> list[Email]:
     """Returns all the draft emails in the inbox. Each email has a recipient, a subject, and a body."""
     return inbox.drafts
 
 
-def search_contacts_by_name(inbox: Annotated[Inbox, Depends("inbox")], query: str) -> list[EmailContact]:
+def search_contacts_by_name(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg], query: str) -> list[EmailContact]:
     """Finds contacts in the inbox's contact list by name.
     It returns a list of contacts that match the given name.
 
@@ -244,7 +244,7 @@ def search_contacts_by_name(inbox: Annotated[Inbox, Depends("inbox")], query: st
     return inbox.find_contacts_by_name(query)
 
 
-def search_contacts_by_email(inbox: Annotated[Inbox, Depends("inbox")], query: str) -> list[EmailContact]:
+def search_contacts_by_email(inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg], query: str) -> list[EmailContact]:
     """Finds contacts in the inbox's contact list by email.
     It returns a list of contacts that match the given email.
 

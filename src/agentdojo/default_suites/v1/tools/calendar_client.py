@@ -7,6 +7,7 @@ from typing_extensions import Self
 from agentdojo.default_suites.v1.tools.email_client import Inbox
 from agentdojo.default_suites.v1.tools.types import CalendarEvent, CalendarEventID, EvenStatus
 from agentdojo.functions_runtime import Depends
+from langchain_core.tools import InjectedToolArg
 
 
 class Calendar(BaseModel):
@@ -125,7 +126,7 @@ class Calendar(BaseModel):
         return event
 
 
-def get_day_calendar_events(calendar: Annotated[Calendar, Depends("calendar")], day: str) -> list[CalendarEvent]:
+def get_day_calendar_events(calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg], day: str) -> list[CalendarEvent]:
     """Returns the appointments for the given `day`. Returns a list of dictionaries with informations about each meeting.
 
     :param day: The day for which to return the appointments. Must be in format YYYY-MM-DD.
@@ -135,8 +136,8 @@ def get_day_calendar_events(calendar: Annotated[Calendar, Depends("calendar")], 
 
 
 def create_calendar_event(
-    calendar: Annotated[Calendar, Depends("calendar")],
-    inbox: Annotated[Inbox, Depends("inbox")],
+    calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg],
+    inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg],
     title: str,
     start_time: str,
     end_time: str,
@@ -169,7 +170,7 @@ def create_calendar_event(
 
 
 def search_calendar_events(
-    calendar: Annotated[Calendar, Depends("calendar")],
+    calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg],
     query: str,
     date: str | None = None,
 ) -> list[CalendarEvent]:
@@ -189,7 +190,7 @@ def search_calendar_events(
 
 
 def get_current_day(
-    calendar: Annotated[Calendar, Depends("calendar")],
+    calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg],
 ) -> str:
     """Returns the current day in ISO format, e.g. '2022-01-01'.
     It is useful to know what the current day, year, or month is, as the assistant
@@ -198,8 +199,8 @@ def get_current_day(
 
 
 def cancel_calendar_event(
-    calendar: Annotated[Calendar, Depends("calendar")],
-    inbox: Annotated[Inbox, Depends("inbox")],
+    calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg],
+    inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg],
     event_id: str,
 ) -> str:
     """Cancels the event with the given `event_id`. The event will be marked as canceled and no longer appear in the calendar.
@@ -212,8 +213,8 @@ def cancel_calendar_event(
 
 
 def reschedule_calendar_event(
-    calendar: Annotated[Calendar, Depends("calendar")],
-    inbox: Annotated[Inbox, Depends("inbox")],
+    calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg],
+    inbox: Annotated[Inbox, Depends("inbox"), InjectedToolArg],
     event_id: str,
     new_start_time: str,
     new_end_time: str | None = None,
@@ -240,7 +241,7 @@ def reschedule_calendar_event(
 
 
 def add_calendar_event_participants(
-    calendar: Annotated[Calendar, Depends("calendar")],
+    calendar: Annotated[Calendar, Depends("calendar"), InjectedToolArg],
     event_id: str,
     participants: list[str],
 ) -> CalendarEvent:

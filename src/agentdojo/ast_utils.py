@@ -11,8 +11,14 @@ class ASTParsingError(Exception): ...
 def create_python_function_from_tool_call(func_call_dict: FunctionCall) -> str:
     try:
         # Extract function name and arguments
-        func_name = func_call_dict.function
-        args_dict = func_call_dict.args
+        try:
+            func_name = func_call_dict.function
+        except AttributeError:
+            func_name = func_call_dict.get("name")
+        try:
+            args_dict = func_call_dict.args
+        except AttributeError:
+            args_dict = func_call_dict.get("args")
 
         # Create the function name node
         func_name_node = ast.Name(id=func_name, ctx=ast.Load())
