@@ -1,68 +1,78 @@
-# AgentDyn: Are Your Agent Security Defenses Deployable in Real-World Dynamic Environments?
+# AgentDojo Unified (0.1.35 + AgentDyn + ADI + ChatInject + Cascade)
 
-[Hao Li](https://leolee99.github.io/), [Ruoyao Wen](https://github.com/ruoyaow/), [Shanghao Shi](https://shishishi123.github.io/), [Ning Zhang](https://cybersecurity.seas.wustl.edu/index.html), [Yevgeniy Vorobeychik](https://vorobeychik.com/), [Chaowei Xiao](https://xiaocw11.github.io/).
+A consolidated fork of [AgentDojo](https://github.com/ethz-spylab/agentdojo) **v0.1.35**
+(default benchmark suite version **v1.2**) that merges several attack/benchmark extensions
+into one pip-installable package, so downstream defense repos can depend on a single
+`agentdojo` version:
 
-The official implementation of the paper "[AgentDyn: Are Your Agent Security Defenses Deployable in Real-World Dynamic Environments?](https://arxiv.org/pdf/2602.03117)".
+| Component | Source | What it adds |
+|---|---|---|
+| AgentDojo v0.1.35 | [ethz-spylab/agentdojo](https://github.com/ethz-spylab/agentdojo) | Base framework, suites v1–v1.2.2 (workspace, banking, slack, travel) |
+| AgentDyn | [SaFo-Lab/AgentDyn](https://github.com/SaFo-Lab/AgentDyn) ([paper](https://arxiv.org/pdf/2602.03117)) | `shopping`, `github`, `dailylife` dynamic suites; PIGuard / PromptGuard2 detectors; CaMeL / Progent / DRIFT defense integrations under `src/agentdojo/defenses/` |
+| ADI | [compsec-snu/adi](https://github.com/compsec-snu/adi) | Agent Data Injection attacks (`data_only_syntactic`, `data_only_semantic`), LangGraph agent loading (`--agent`), nine ported defenses under `agents/`, `camel_bypass_poc` suite |
+| ChatInject | [hwanchang00/ChatInject](https://github.com/hwanchang00/ChatInject) | Chat-template role-confusion attacks (`chat_inject_qwen3`, `chat_inject_glm`, multi-turn `*_with_utility_*` variants with pre-generated dialogues) |
+| Cascade | [arXiv:2510.05244](https://arxiv.org/abs/2510.05244) | Stage-2 semantic-template attacks (`cascade_user_note`, `cascade_task_queue`, `cascade_safe_tags`, `cascade_decoy_safe_tags`, `cascade_skip_directive`, `cascade_triple_layer`, `cascade_decoy_system_update`) and the Stage-3 adaptive attack (`cascade_adaptive`) |
 
-AgentDyn is a dynamic, open-ended agent security benchmark featuring 60 challenging open-ended user tasks and 560 injection test cases across the Shopping, GitHub, and Daily Life scenarios. It is built on top of the [AgentDojo](https://github.com/ethz-spylab/agentdojo) framework. A huge thanks to the AgentDojo team for their admirable contribution to the community!
-
-## Quickstart
-
-```bash
-pip install -e .
-```
-
-
-## Running the benchmark
-
-For adaptability, we support an evaluation script same as AgentDojo's. Documentation on how to use the script can be obtained with the `--help` flag.
-
-For example, to run the `shopping` suite , with `gpt-4o-2024-08-06` as the LLM, the tool filter as a defense, and the attack with important_instructions, run the following command:
+## Install
 
 ```bash
-python -m agentdojo.scripts.benchmark -s shopping \
-    --model GPT_4O_2024_08_06 \
-    --defense tool_filter --attack important_instructions
+pip install git+https://github.com/lindsey98/agentdojo-unified.git
+# or, for development:
+git clone https://github.com/lindsey98/agentdojo-unified.git && pip install -e agentdojo-unified
 ```
 
-To run with external defenses integrated in this repo layout, you can directly use:
+The LlamaFirewall-based ADI agent needs the extra: `pip install "agentdojo[adi] @ git+..."`.
 
+## Quick start
 
-Before running, please export your API key, through:
+```bash
+# AgentDojo/AgentDyn-style pipeline run (default --benchmark-version v1.2)
+python -m agentdojo.scripts.benchmark -s banking \
+    --model GPT_4O_2024_08_06 --defense tool_filter --attack important_instructions
 
-1. OpenAI Model: export OPENAI_API_KEY=XXX
-2. Google Model: export GOOGLE_API_KEY=XXX
-3. Open-sourced Models (Qwen, LlaMA, other supported models): export OPENROUTER_API_KEY=XXX
+# AgentDyn dynamic suites
+python -m agentdojo.scripts.benchmark -s shopping -s github -s dailylife \
+    --model GPT_4O_2024_08_06 --attack important_instructions
 
-## Supported settings
+# ADI data-only injection with a ported defense agent
+python -m agentdojo.scripts.benchmark --agent baseline --model gpt-4o-mini \
+    --attack data_only_syntactic -s workspace
 
-#### Available Suites:
-AgentDyn supports `shopping`,`github`, and `dailylife` suites, as well as the original four suites from AgentDojo (`banking`,`slack`, `travel` and `workspace`).
+# ChatInject (template-only; multi-turn variants cover banking/slack/travel GOALs)
+python -m agentdojo.scripts.benchmark -s banking --model LOCAL --model-id Qwen/Qwen3-32B \
+    --attack chat_inject_qwen3
 
-#### Available Models: 
-We evaluate the following models in our paper: ``GPT_4O_MINI_2024_07_18``, ``GPT_4O_2024_08_06``, ``GEMINI_2_5_FLASH``, ``GEMINI_2_5_PRO``, ``LLAMA_3_3_70B``, ``QWEN3_235B``, ``GPT_5_1_2025_11_13``, ``GPT_5_MINI_2025_08_07``. 
-Other models supported by AgentDojo are also compatible.
+# Cascade Stage-2 templates
+python -m agentdojo.scripts.benchmark -s banking --model GPT_4O_2024_08_06 \
+    --defense transformers_pi_detector --attack cascade_triple_layer
 
-#### Available Defenses: 
-In addition to the original defenses in AgentDojo, we provide support for [PIGuard](https://aclanthology.org/2025.acl-long.1468.pdf) and [PromptGuard2](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M). We also support directly invoking external defenses in this workspace: [CaMeL](https://github.com/google-research/camel-prompt-injection), [Progent](https://github.com/sunblaze-ucb/progent), [DRIFT](https://github.com/SaFo-Lab/DRIFT),.
-
-The complete list of defenses supported in our paper includes: ``repeat_user_prompt``, ``spotlighting_with_delimiting``, ``tool_filter``, ``transformers_pi_detector``, ``piguard_detector``, ``prompt_guard_2_detector``, ``camel``,  ``progent``, ``drift``.
-
-
-## Inspect Results
-
-To review the results reported in our paper, please refer to the log files in the ``(runs/)``.
-
-## References
-
-If you find this work useful in your research or applications, we appreciate that if you can kindly cite:
-
+# Cascade Stage-3 adaptive (runs the pipeline up to CASCADE_MAX_ROUNDS times per task pair)
+CASCADE_DEFENSE=tool_filter CASCADE_MUTATOR_MODEL=gpt-4o-mini \
+python -m agentdojo.scripts.benchmark -s banking --model GPT_4O_2024_08_06 \
+    --defense tool_filter --attack cascade_adaptive
 ```
-@articles{AgentDyn,
-  title={AgentDyn: Are Your Agent Security Defenses Deployable in Real-World Dynamic Environments?},
-  author={Hao Li and Ruoyao Wen and Shanghao Shi and Ning Zhang and Yevgeniy Vorobeychik and Chaowei Xiao},
-  journal = {arXiv},
-  eprint = {2602.03117},
-  year={2026}
-}
-```
+
+Notes:
+
+- ChatInject multi-turn (`*_with_utility_*`) variants look up pre-generated dialogues by exact
+  injection GOAL string; shipped data covers the banking/slack/travel GOALs. Uncovered GOALs
+  raise a `ValueError`.
+- `cascade_adaptive` reads `CASCADE_MAX_ROUNDS`, `CASCADE_DEFENSE`, `CASCADE_MUTATOR_MODEL`,
+  `CASCADE_MUTATOR_BASE_URL`/`CASCADE_MUTATOR_API_KEY` (falling back to
+  `LOCAL_BASE_URL`/`LOCAL_API_KEY`, then `OPENAI_API_KEY`) and requires a pipeline agent
+  (not `--agent` LangGraph agents).
+- The upstream `runs/` results directories were dropped from this fork to keep
+  `pip install git+...` fast; see the source repos for the papers' logs.
+
+## Merge notes
+
+- Base: upstream tag `v0.1.35`; AgentDyn and ADI imported as branches and merged.
+- ADI's executor abstraction is kept, with AgentDyn's slash-sanitized log names
+  (`executor_name.replace("/", "_")`) and AgentDyn's `PipelineConfig(suite_name=...)`.
+- `llamafirewall` moved from a hard dependency to the `[adi]` extra.
+- ADI's `camel_bypass_poc` had a broken `from mistralai import Callable` import, fixed to
+  `collections.abc`.
+
+Everything else (licenses, citations, docs) follows the upstream projects — see
+`agentdojo_README.md` (upstream), the AgentDyn README content in `docs/`, and the source
+repositories linked above. If you use these components, cite the corresponding papers.

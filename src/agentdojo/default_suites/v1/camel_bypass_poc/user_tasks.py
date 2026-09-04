@@ -6,7 +6,7 @@ from agentdojo.default_suites.v1.camel_bypass_poc.task_suite import (
 )
 from agentdojo.default_suites.v1.security_checks import make_tool_args_check
 from agentdojo.functions_runtime import FunctionCall
-from mistralai import Callable
+from collections.abc import Callable
 
 CamelBypassUserTask = BaseUserTask[CamelBypassEnvironment]
 
