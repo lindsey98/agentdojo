@@ -8,6 +8,7 @@ from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionContentPartTextParam,
     ChatCompletionDeveloperMessageParam,
+    ChatCompletionSystemMessageParam,
     ChatCompletionMessage,
     ChatCompletionMessageParam,
     ChatCompletionMessageToolCall,
@@ -54,6 +55,12 @@ def _is_reasoning_model(model_name: str) -> bool:
     return any(model in model_name for model in _REASONING_MODELS)
 
 
+def _supports_temperature(model_name: str) -> bool:
+    lowered = model_name.lower()
+    unsupported_prefixes = ("o1", "o3", "o4", "gpt-5")
+    return not lowered.startswith(unsupported_prefixes)
+
+
 @overload
 def _content_blocks_to_openai_content_blocks(
     message: ChatUserMessage | ChatSystemMessage,
@@ -77,9 +84,15 @@ def _content_blocks_to_openai_content_blocks(
 def _message_to_openai(message: ChatMessage, model_name: str) -> ChatCompletionMessageParam:
     match message["role"]:
         case "system":
-            return ChatCompletionDeveloperMessageParam(
-                role="developer", content=_content_blocks_to_openai_content_blocks(message)
-            )
+            if model_name == "qwen3-max":
+                # Qwen3-Max does not support developer messages
+                return ChatCompletionSystemMessageParam(
+                    role="system", content=_content_blocks_to_openai_content_blocks(message)
+                )
+            else:
+                return ChatCompletionDeveloperMessageParam(
+                    role="developer", content=_content_blocks_to_openai_content_blocks(message)
+                )
         case "user":
             return ChatCompletionUserMessageParam(
                 role="user", content=_content_blocks_to_openai_content_blocks(message)
@@ -125,7 +138,17 @@ def _assistant_message_to_content(message: ChatCompletionMessage) -> list[Messag
 
 def _openai_to_assistant_message(message: ChatCompletionMessage) -> ChatAssistantMessage:
     if message.tool_calls is not None:
-        tool_calls = [_openai_to_tool_call(tool_call) for tool_call in message.tool_calls]
+        # tool_calls = [_openai_to_tool_call(tool_call) for tool_call in message.tool_calls]
+        # Add tolerance for malformed tool calls from API responses
+        tool_calls = []
+        for tool_call in message.tool_calls:
+            try:
+                temp = _openai_to_tool_call(tool_call)
+                tool_calls.append(temp)
+            except Exception:
+                continue
+                # message.tool_calls.remove(tool_call)
+                
     else:
         tool_calls = None
     return ChatAssistantMessage(role="assistant", content=_assistant_message_to_content(message), tool_calls=tool_calls)
@@ -154,12 +177,13 @@ def chat_completion_request(
     reasoning_effort: ChatCompletionReasoningEffort | None,
     temperature: float | None = 0.0,
 ):
+    effective_temperature = temperature if _supports_temperature(model) else None
     return client.chat.completions.create(
         model=model,
         messages=messages,
         tools=tools or NOT_GIVEN,
         tool_choice="auto" if tools else NOT_GIVEN,
-        temperature=temperature or NOT_GIVEN,
+        temperature=effective_temperature if effective_temperature is not None else NOT_GIVEN,
         reasoning_effort=reasoning_effort or NOT_GIVEN,
     )
 
@@ -204,11 +228,12 @@ class OpenAILLM(BasePipelineElement):
 
 
 class OpenAILLMToolFilter(BasePipelineElement):
-    def __init__(self, prompt: str, client: openai.OpenAI, model: str, temperature: float | None = 0.0) -> None:
+    def __init__(self, prompt: str, client: openai.OpenAI, model: str, reasoning_effort: ChatCompletionReasoningEffort | None = None, temperature: float | None = 0.0) -> None:
         self.prompt = prompt
         self.client = client
         self.model = model
         self.temperature = temperature
+        self.reasoning_effort: ChatCompletionReasoningEffort | None = reasoning_effort
 
     def query(
         self,
@@ -226,7 +251,12 @@ class OpenAILLMToolFilter(BasePipelineElement):
             messages=openai_messages,
             tools=openai_tools or NOT_GIVEN,
             tool_choice="none",
-            temperature=self.temperature,
+            temperature=(
+                self.temperature
+                if self.temperature is not None and _supports_temperature(self.model)
+                else NOT_GIVEN
+            ),
+            reasoning_effort=self.reasoning_effort or NOT_GIVEN,
         )
         output = _openai_to_assistant_message(completion.choices[0].message)
 
