@@ -357,7 +357,7 @@ def _build_camel_pipeline(llm_name: str, defense: str) -> BasePipelineElement:
         eval_mode=MetadataEvalMode.NORMAL,
         q_llm=None,
     )
-    pipeline.name = f"{llm_name}-{defense}"
+    pipeline.name = f"{llm_name}+{defense}"
     return pipeline
 
 
@@ -389,7 +389,7 @@ def _build_drift_pipeline(
     llm = DriftMessageAdapter(drift_llm)
     tools_loop = DRIFTToolsExecutionLoop([ToolsExecutor(tool_output_formatter), llm])
     pipeline = AgentPipeline([InitQuery(), llm, tools_loop])
-    pipeline.name = f"{llm_name}-drift"
+    pipeline.name = f"{llm_name}+drift"
     return pipeline
 
 
@@ -613,7 +613,7 @@ class AgentPipeline(BasePipelineElement):
                 llm,
                 tools_loop,
             ])
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{llm_name}+{config.defense}"
             return pipeline
         if config.defense == "tool_filter":
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), llm])
@@ -630,7 +630,7 @@ class AgentPipeline(BasePipelineElement):
                     tools_loop,
                 ]
             )
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{llm_name}+{config.defense}"
             return pipeline
         if config.defense == "transformers_pi_detector" or config.defense == "piguard_detector" or config.defense == "prompt_guard_2_detector":
             if config.defense == "transformers_pi_detector":
@@ -663,12 +663,12 @@ class AgentPipeline(BasePipelineElement):
                     tools_loop,
                 ]
             )
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{llm_name}+{config.defense}"
             return pipeline
         if config.defense == "repeat_user_prompt":
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), InitQuery(), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{llm_name}+{config.defense}"
             return pipeline
         if config.defense == "spotlighting_with_delimiting":
             # Defense from https://arxiv.org/abs/2403.14720
@@ -680,6 +680,6 @@ class AgentPipeline(BasePipelineElement):
             delimited_tool_output_formatter = lambda result: f"<<{tool_output_formatter(result)}>>"
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter=delimited_tool_output_formatter), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{llm_name}+{config.defense}"
             return pipeline
         raise ValueError("Invalid defense name")
