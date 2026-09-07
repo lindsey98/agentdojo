@@ -957,6 +957,94 @@ class TaskSuite(Generic[Env]):
                 warning_list = [warning.to_dict() for warning in second_run_output["warnings"]]
                 logger.set_contextarg("second_run_isolate_gpt_warnings", warning_list)
 
+    def run_task_with_pipeline_msg(
+        self,
+        agent_pipeline: BasePipelineElement,
+        user_task: BaseUserTask[Env] | BaseInjectionTask[Env],
+        injection_task: BaseInjectionTask[Env] | None,
+        injections: dict[str, str],
+        runtime_class: type[FunctionsRuntime] = FunctionsRuntime,
+        environment: Env | None = None,
+        verbose: bool = False,
+        extra_args: dict[str, str] | None = None,
+    ) -> tuple[bool, bool]:
+        """Run a task with the provided pipeline.
+
+        Args:
+            agent_pipeline: The pipeline to use for the task.
+            user_task: The user task to run.
+            injection_task: The injection task to run.
+            injections: The injections to use for the task.
+            runtime_class: The runtime class to use for the task.
+            environment: The environment to use for the task.
+            verbose: Whether to print debug information.
+
+        Returns:
+            A tuple of two booleans, the first indicating whether the task was successful, and the second indicating if
+            the injection was successful.
+        """
+        # If no environment is provided, load the default environment
+        if environment is None:
+            environment = self.load_and_inject_default_environment(injections)
+        # Initialize the environment according to the task
+        if isinstance(user_task, BaseUserTask):
+            task_environment = user_task.init_environment(environment)
+        else:
+            task_environment = environment
+
+        # Create a copy of the environment before running the user task to then diff if needed
+        pre_environment = task_environment.model_copy(deep=True)
+        if isinstance(user_task, BaseUserTask):
+            prompt = user_task.PROMPT
+        else:
+            prompt = user_task.GOAL
+
+        runtime = runtime_class(self.tools)
+        model_output = None
+        messages = []
+
+        args = None
+        for _ in range(3):
+            # Run the user task
+            try:
+                _, _, task_environment, messages, args = agent_pipeline.query(prompt, runtime, task_environment, extra_args=extra_args)
+            except AbortAgentError as e:
+                # get last environment and messages
+                task_environment = e.task_environment
+                messages = e.messages
+
+            model_output = model_output_from_messages(messages)
+            if model_output is not None:
+                break
+
+        if args is None:
+            args = {}
+        if model_output is None:
+            warnings.warn(f"Model output was None for task {user_task.ID}")
+
+        functions_stack_trace = functions_stack_trace_from_messages(messages)
+        utility = self._check_task_result(
+            user_task,
+            model_output or [],
+            pre_environment,
+            task_environment,  # type: ignore
+            functions_stack_trace,
+        )
+
+        # Early return if no injection was intended
+        if injection_task is None:
+            return utility, True, messages, args
+
+        security = self._check_task_result(
+            injection_task,
+            model_output or [],
+            pre_environment,
+            task_environment,  # type: ignore
+            functions_stack_trace,
+        )
+
+        return utility, security, messages, args
+
     def check(self, check_injectable: bool = True) -> tuple[bool, tuple[dict[str, tuple[bool, str]], dict[str, bool]]]:
         injection_defaults = self.get_injection_vector_defaults()
         canary_injections = {inj: f"---CANARY_{inj}---" for inj in injection_defaults}
