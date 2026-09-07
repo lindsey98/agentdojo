@@ -1,6 +1,7 @@
 from ast import literal_eval
 from collections.abc import Callable, Sequence
 import json
+import logging
 import uuid
 from networkx import topological_sort
 
@@ -165,6 +166,17 @@ class ToolsExecutionLoop(BasePipelineElement):
         return query, runtime, env, messages, extra_args
 
 
+def _format_dag_for_log(dag_data) -> str:
+    """Compact one-line-per-node rendering of a DAG dict for console logging."""
+    if not isinstance(dag_data, dict):
+        return str(dag_data)
+    lines = []
+    for tc in dag_data.get("tool_calls", []):
+        fn = tc.get("function_name", "?")
+        lines.append(f"  [{tc.get('id', '?')}] {fn}({tc.get('args', {})}) depends_on={tc.get('depends_on', [])}")
+    return "\n".join(lines) if lines else "  (empty)"
+
+
 class DagToolsExecutionLoop(BasePipelineElement):
     """Executes in loop a sequence of pipeline elements related to tool execution until the
     LLM does not return any tool calls.
@@ -199,6 +211,11 @@ class DagToolsExecutionLoop(BasePipelineElement):
         extra_args.setdefault("runtime_new_tool_calls", [])
         extra_args.setdefault("dag_events", [])
 
+        console = Logger().get()
+        initial_dag = extra_args.get("initial_dag")
+        if initial_dag is not None:
+            logging.info("[IPIGuard] committed plan (initial DAG):\n%s", _format_dag_for_log(initial_dag))
+
         for node in topological_sort(dag):
             tool_call = dag.nodes[node]
 
@@ -210,12 +227,17 @@ class DagToolsExecutionLoop(BasePipelineElement):
                 "function": tool_call["function_call"].function,
                 "depends_on": tool_call.get("depends_on", []),
             })
+            logging.info("[IPIGuard] visit node %s -> %s", node, tool_call["function_call"].function)
 
             query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)
+            # Mirror the growing message stream to the console (OutputLogger prints only new messages).
+            console.log(messages)
 
         # Snapshot the expanded DAG (resolved args after traversal) for logging.
         try:
             extra_args["expanded_dag"] = json.loads(self.executor.traverse_llm._dag_to_json_str(dag))
+            logging.info("[IPIGuard] expanded DAG (after arg resolution):\n%s",
+                         _format_dag_for_log(extra_args["expanded_dag"]))
         except Exception:
             pass
 
