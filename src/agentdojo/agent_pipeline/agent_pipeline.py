@@ -27,9 +27,12 @@ from agentdojo.agent_pipeline.llms.local_llm import LocalLLM
 from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM, OpenAILLMToolFilter
 from agentdojo.agent_pipeline.llms.prompting_llm import PromptingLLM
 from agentdojo.agent_pipeline.pi_detector import TransformersBasedPIDetector
+from agentdojo.agent_pipeline.llms.ipiguard_llm import OpenAIConstructLLM, OpenAITraverseLLM
 from agentdojo.agent_pipeline.tool_execution import (
     ToolsExecutionLoop,
     ToolsExecutor,
+    DagToolsExecutor,
+    DagToolsExecutionLoop,
     tool_result_to_str,
 )
 from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime
@@ -44,6 +47,7 @@ TOOL_FILTER_PROMPT = (
 )
 
 DEFENSES = [
+    "ipiguard",
     "tool_filter",
     "transformers_pi_detector",
     "piguard_detector",
@@ -485,7 +489,7 @@ class PipelineConfig(BaseModel):
     """Which LLM to use. One of the models in [`ModelsEnum`][agentdojo.models.ModelsEnum]
     or a custom object which inherits from [`BasePipelineElement`][agentdojo.agent_pipeline.base_pipeline_element.BasePipelineElement]
     and implements calls to an LLM."""
-    model_id: str | None
+    model_id: str | None = None
     """LLM model id for local models."""
     defense: str | None
     """Which defense to use. One of the defenses in [`DEFENSES`][agentdojo.agent_pipeline.agent_pipeline.DEFENSES]."""
@@ -556,6 +560,28 @@ class AgentPipeline(BasePipelineElement):
         if config.defense is None:
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = llm_name
+            return pipeline
+        if config.defense == "ipiguard":
+            # IPIGuard: plan a tool-dependency DAG up front, then execute it, gating runtime-discovered
+            # tool calls by the read-only whitelist. Reuse the model's own OpenAI-compatible client
+            # (whatever provider get_llm built for it); Claude uses its OpenAI-compatible endpoint.
+            model_lower = str(config.llm).lower()
+            if "claude" in model_lower:
+                client = openai.OpenAI(
+                    api_key=os.getenv("ANTHROPIC_API_KEY"),
+                    base_url=os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1/"),
+                )
+            else:
+                client = getattr(llm, "client", None) or openai.OpenAI(
+                    api_key=os.getenv("LOCAL_API_KEY", os.getenv("OPENAI_API_KEY", "EMPTY")),
+                    base_url=os.getenv("LOCAL_BASE_URL", os.getenv("OPENAI_BASE_URL")),
+                )
+            construct_llm = OpenAIConstructLLM(client, config.llm)
+            traverse_llm = OpenAITraverseLLM(client, config.llm)
+            executor = DagToolsExecutor(traverse_llm)
+            tools_loop = DagToolsExecutionLoop(executor)
+            pipeline = cls([system_message_component, init_query_component, construct_llm, tools_loop])
             pipeline.name = llm_name
             return pipeline
         if config.defense == "camel":
