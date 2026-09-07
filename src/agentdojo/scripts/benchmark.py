@@ -22,6 +22,11 @@ from agentdojo.models import ModelsEnum
 from agentdojo.task_suite.load_suites import get_suite, get_suites
 from agentdojo.task_suite.task_suite import TaskSuite
 
+# Suites that ship with AgentDyn's "complete tasks without confirmation" system message. It is scoped
+# to these suites so the original AgentDojo suites keep the upstream default (and stay comparable to
+# published numbers). An explicit --system-message(-name) overrides this.
+AGENTDYN_SUITES = {"shopping", "github", "dailylife"}
+
 
 def benchmark_suite(
     suite: TaskSuite,
@@ -43,6 +48,10 @@ def benchmark_suite(
 ) -> SuiteResults:
     if not load_dotenv(".env"):
         warnings.warn("No .env file found")
+
+    # Scope AgentDyn's no-confirmation system message to its own suites (see AGENTDYN_SUITES).
+    if system_message is None and system_message_name is None and suite.name in AGENTDYN_SUITES:
+        system_message_name = "agentdyn"
 
     print(f"Running benchmark for suite: '{suite.name}'")
 
@@ -284,7 +293,7 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
     help="Agent name to load from agents/ directory. If not provided, "
          "creates pipeline from --model and --defense options.",
 )
-def main(
+def run_benchmark(
     suites: tuple[str, ...],
     model: ModelsEnum,
     benchmark_version: str = "v1.2.2",
@@ -360,7 +369,7 @@ def main(
                     "injection_tasks_utility_results"
                 ][injection_task]
         show_results("combined", combined_results, attack is not None)
-        exit(0)
+    return
 
     with Pool(max_workers) as p:
         arguments = zip(
@@ -382,6 +391,46 @@ def main(
 
     for suite_name, result in zip(suites, results):
         show_results(suite_name, result, attack is not None)
+
+
+
+
+def main(
+    suites: tuple[str, ...],
+    model: ModelsEnum,
+    benchmark_version: str = "v1.2.2",
+    logdir: Path = Path("./runs"),
+    user_tasks: tuple[str, ...] = (),
+    injection_tasks: tuple[str, ...] = (),
+    model_id: str | None = None,
+    attack: str | None = None,
+    defense: str | None = None,
+    tool_delimiter: str = "tool",
+    system_message_name: str | None = None,
+    system_message: str | None = None,
+    max_workers: int = 1,
+    force_rerun: bool = False,
+    modules_to_load: tuple[str, ...] = (),
+    agent: str | None = None,
+):
+    run_benchmark(
+        suites=suites,
+        model=model,
+        benchmark_version=benchmark_version,
+        logdir=logdir,
+        user_tasks=user_tasks,
+        injection_tasks=injection_tasks,
+        model_id=model_id,
+        attack=attack,
+        defense=defense,
+        tool_delimiter=tool_delimiter,
+        system_message_name=system_message_name,
+        system_message=system_message,
+        max_workers=max_workers,
+        force_rerun=force_rerun,
+        modules_to_load=modules_to_load,
+        agent=agent,
+    )
 
 
 if __name__ == "__main__":
