@@ -26,7 +26,7 @@ from agentdojo.agent_pipeline.llms.google_llm import GoogleLLM
 from agentdojo.agent_pipeline.llms.local_llm import LocalLLM
 from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM, OpenAILLMToolFilter
 from agentdojo.agent_pipeline.llms.prompting_llm import PromptingLLM
-from agentdojo.agent_pipeline.pi_detector import TransformersBasedPIDetector
+from agentdojo.agent_pipeline.pi_detector import MELON, TransformersBasedPIDetector
 from agentdojo.agent_pipeline.llms.ipiguard_llm import OpenAIConstructLLM, OpenAITraverseLLM
 from agentdojo.agent_pipeline.tool_execution import (
     ToolsExecutionLoop,
@@ -54,6 +54,7 @@ DEFENSES = [
     "prompt_guard_2_detector",
     "spotlighting_with_delimiting",
     "repeat_user_prompt",
+    "melon",
     "camel",
     "drift",
     "progent",
@@ -681,5 +682,20 @@ class AgentPipeline(BasePipelineElement):
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter=delimited_tool_output_formatter), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
             pipeline.name = f"{llm_name}+{config.defense}"
+            return pipeline
+        if config.defense == "melon":
+            # MELON re-executes the agent's trajectory with a masked user prompt and compares the
+            # resulting tool calls to detect prompt injection. The MELON element wraps the LLM (it
+            # calls ``self.llm.query`` for both the original and masked runs), so it goes at the end
+            # of the tools loop. Its detection-embedding backend is configured via MELON_EMBED_* env
+            # vars (openai | sentence-transformers | openai-compatible).
+            tools_loop = ToolsExecutionLoop(
+                [
+                    ToolsExecutor(tool_output_formatter),
+                    MELON(llm),
+                ]
+            )
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{llm_name}+melon"
             return pipeline
         raise ValueError("Invalid defense name")

@@ -13,7 +13,7 @@ import json
 from typing import Any
 
 _CSS = """
-:root { --sys:#64748b; --usr:#2563eb; --ast:#16a34a; --tool:#d97706; --dag:#7c3aed; --plan:#0891b2; --blk:#b91c1c; }
+:root { --sys:#64748b; --usr:#2563eb; --ast:#16a34a; --tool:#d97706; --dag:#7c3aed; --plan:#0891b2; --blk:#b91c1c; --mel:#9333ea; }
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:"Helvetica Neue", Arial, sans-serif; background:#fff; display:flex; justify-content:center; padding:24px; }
 .figure { width:960px; max-width:100%; }
@@ -29,6 +29,8 @@ body { font-family:"Helvetica Neue", Arial, sans-serif; background:#fff; display
 .tool { border-color:var(--tool); background:#fffbeb; margin-left:32px; } .tool .role { background:var(--tool); }
 .dagcard { border-color:var(--dag); background:#f5f3ff; } .dagcard .role { background:var(--dag); }
 .plancard { border-color:var(--plan); background:#ecfeff; } .plancard .role { background:var(--plan); }
+.melcard { border-color:var(--mel); background:#faf5ff; margin-left:32px; } .melcard .role { background:var(--mel); }
+.melcard .flagged { color:#b91c1c; font-weight:700; } .melcard .safe { color:#15803d; font-weight:700; }
 .box { border-radius:6px; padding:6px 10px; margin-top:6px; display:block; white-space:pre-wrap; overflow-x:auto; font-family:"SF Mono", Menlo, Consolas, monospace; font-size:11.5px; }
 .dagbox { background:#ede9fe; border:1px solid #c4b5fd; color:#4c1d95; }
 .planbox { background:#cffafe; border:1px solid #67e8f9; color:#155e75; }
@@ -92,7 +94,36 @@ def _render_tool_calls(tool_calls: list) -> str:
     return "".join(out)
 
 
-def _render_messages(messages: list) -> str:
+def _render_melon_card(d: dict, i: int) -> str:
+    """One MELON detection card (the check run against a single tool response)."""
+    if not isinstance(d, dict):
+        return ""
+    is_inj = bool(d.get("is_injection"))
+    cos = d.get("max_cosine_similarity")
+    thr = d.get("threshold")
+    cos_s = f"{cos:.3f}" if isinstance(cos, (int, float)) else _esc(cos)
+    thr_s = f"{thr:.2f}" if isinstance(thr, (int, float)) else _esc(thr)
+    if is_inj:
+        verdict = f'<span class="flagged">FLAGGED</span> &mdash; max cosine {cos_s} &ge; {thr_s}'
+    else:
+        verdict = f'<span class="safe">allowed</span> &mdash; max cosine {cos_s} &lt; {thr_s}'
+    orig = (d.get("original_response") or {}).get("tool_calls") or []
+    masked = (d.get("masked_response") or {}).get("tool_calls") or []
+    detail = (
+        f'<div class="small">original: {_esc(", ".join(orig) or "—")}<br>'
+        f'masked: {_esc(", ".join(masked) or "—")}</div>'
+    )
+    return (
+        f'<div class="msg melcard"><span class="role">MELON &middot; check {i + 1}</span>'
+        f'<div>{verdict}</div>{detail}</div>'
+    )
+
+
+def _render_messages(messages: list, detections: list | None = None) -> str:
+    # MELON runs one detection per tool response; interleave each card after the tool message it
+    # checked (in order). Leftover detections are appended at the end so nothing is dropped.
+    detections = list(detections or [])
+    det_idx = 0
     parts = []
     for m in messages or []:
         role = m.get("role", "?") if isinstance(m, dict) else "?"
@@ -121,6 +152,12 @@ def _render_messages(messages: list) -> str:
                 if tcs:
                     inner.append(_render_tool_calls(tcs))
         parts.append(f'<div class="msg {cls}">{"".join(inner)}</div>')
+        if role == "tool" and det_idx < len(detections):
+            parts.append(_render_melon_card(detections[det_idx], det_idx))
+            det_idx += 1
+    while det_idx < len(detections):
+        parts.append(_render_melon_card(detections[det_idx], det_idx))
+        det_idx += 1
     return "".join(parts)
 
 
@@ -233,7 +270,7 @@ def render_trace_html(data: dict) -> str:
         f'<div class="subnote">{subnote}</div>'
         f"{_render_preplan(data)}"
         f"{_render_plan(data)}"
-        f"{_render_messages(data.get('messages', []))}"
+        f"{_render_messages(data.get('messages', []), data.get('melon_detection'))}"
         f"{_render_runtime(data)}"
         f'<div class="flag">utility {_flag(util)} · security {_flag(sec)}</div>'
         "</div></body></html>"
