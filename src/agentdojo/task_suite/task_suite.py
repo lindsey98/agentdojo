@@ -967,6 +967,7 @@ class TaskSuite(Generic[Env]):
         environment: Env | None = None,
         verbose: bool = False,
         extra_args: dict[str, str] | None = None,
+        security_check_fn=None,
     ) -> tuple[bool, bool]:
         """Run a task with the provided pipeline.
 
@@ -1030,6 +1031,14 @@ class TaskSuite(Generic[Env]):
             task_environment,  # type: ignore
             functions_stack_trace,
         )
+
+        # Data-only attack: score with the provided security_check_fn (there is no injection task).
+        if security_check_fn is not None:
+            model_output_str = get_text_content_as_str(model_output) if model_output else ""
+            security = bool(
+                security_check_fn(model_output_str, pre_environment, task_environment, functions_stack_trace)
+            )
+            return utility, security, messages, args
 
         # Early return if no injection was intended
         if injection_task is None:
