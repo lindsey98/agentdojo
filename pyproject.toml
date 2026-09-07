@@ -39,6 +39,7 @@ dependencies = [
     "openapi-pydantic>=0.5.1",
     "json_repair>=0.55.1",
     "matplotlib>=3.10.1",
+    "networkx>=3.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"

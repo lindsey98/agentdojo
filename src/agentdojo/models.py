@@ -76,6 +76,10 @@ class ModelsEnum(StrEnum):
     LLAMA_3_3_70B = "meta-llama/llama-3.3-70b-instruct"
     QWEN3_235B = "qwen/qwen3-235b-a22b-2507"
     QWEN3_6_35B_A3B = "qwen/qwen3.6-35b-a3b"
+    QWEN_3_6_35B_LOCAL = "Qwen3.6-35B-A3B"
+    """Qwen3.6 35B A3B served locally (vLLM served-model-name), via the local provider."""
+    QWEN_3_30B_LOCAL = "Qwen3-30B-A3B-Instruct-2507"
+    """Qwen3 30B A3B Instruct served locally, via the local provider."""
     OPENROUTER_GEMINI_2_5_PRO = "google/gemini-2.5-pro"
     OPENROUTER_GEMINI_2_5_FLASH = "google/gemini-2.5-flash"
     OPENROUTER_GEMINI_3_PRO_PREVIEW = "google/gemini-3-pro-preview"
@@ -123,6 +127,8 @@ MODEL_PROVIDERS = {
     ModelsEnum.LLAMA_3_3_70B: "openrouter",
     ModelsEnum.QWEN3_235B: "openrouter",
     ModelsEnum.QWEN3_6_35B_A3B: "openrouter",
+    ModelsEnum.QWEN_3_6_35B_LOCAL: "local",
+    ModelsEnum.QWEN_3_30B_LOCAL: "local",
     ModelsEnum.OPENROUTER_GEMINI_2_5_PRO: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_2_5_FLASH: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_3_PRO_PREVIEW: "openrouter",
@@ -171,6 +177,8 @@ MODEL_NAMES = {
     "meta-llama/llama-3.3-70b-instruct": "Llama 3.3",
     "qwen/qwen3-235b-a22b-2507" : "Qwen 3",
     "qwen/qwen3.6-35b-a3b": "Qwen 3",
+    "Qwen3.6-35B-A3B": "Qwen created by Alibaba Cloud.",
+    "Qwen3-30B-A3B-Instruct-2507": "Qwen created by Alibaba Cloud.",
     "google/gemini-2.5-pro": "AI model developed by Google",
     "google/gemini-2.5-flash" : "AI model developed by Google", 
     "google/gemini-3-pro-preview": "AI model developed by Google",

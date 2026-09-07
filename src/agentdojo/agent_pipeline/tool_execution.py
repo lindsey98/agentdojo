@@ -1,14 +1,17 @@
 from ast import literal_eval
 from collections.abc import Callable, Sequence
 import json
+import uuid
+from networkx import topological_sort
 
 from pydantic import BaseModel
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.agent_pipeline.llms.google_llm import EMPTY_FUNCTION_NAME
-from agentdojo.functions_runtime import EmptyEnv, Env, FunctionReturnType, FunctionsRuntime
+from agentdojo.functions_runtime import EmptyEnv, Env, FunctionReturnType, FunctionsRuntime, FunctionCall
 from agentdojo.logging import Logger
-from agentdojo.types import ChatMessage, ChatToolResultMessage, text_content_block_from_string
+from agentdojo.types import ChatMessage, ChatToolResultMessage, ChatAssistantMessage, text_content_block_from_string
+from agentdojo.default_suites.v1.tools.tool_white_list import whitelist
 
 
 def is_string_list(s: str):
@@ -159,4 +162,212 @@ class ToolsExecutionLoop(BasePipelineElement):
             for element in self.elements:
                 query, runtime, env, messages, extra_args = element.query(query, runtime, env, messages, extra_args)
                 logger.log(messages)
+        return query, runtime, env, messages, extra_args
+
+
+class DagToolsExecutionLoop(BasePipelineElement):
+    """Executes in loop a sequence of pipeline elements related to tool execution until the
+    LLM does not return any tool calls.
+
+    Args:
+        elements: a sequence of pipeline elements to be executed in loop. One of them should be
+            an LLM, and one of them should be a [ToolsExecutor][agentdojo.agent_pipeline.ToolsExecutor] (or
+            something that behaves similarly by executing function calls). You can find an example usage
+            of this class [here](../../concepts/agent_pipeline.md#combining-pipeline-components).
+        max_iters: maximum number of iterations to execute the pipeline elements in loop.
+    """
+
+    def __init__(self, executor, max_iters: int = 15) -> None:
+        self.executor = executor
+        self.max_iters = max_iters
+
+    def query(
+        self,
+        query: str,
+        runtime: FunctionsRuntime,
+        env: Env = EmptyEnv(),
+        messages: Sequence[ChatMessage] = [],
+        extra_args: dict = {},
+    ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if len(messages) == 0:
+            raise ValueError("Messages should not be empty when calling ToolsExecutionLoop")
+
+        dag = extra_args['dag']
+        # Accumulates every tool call discovered at runtime (across all nodes)
+        # plus an ordered timeline of DAG events, for logging. The per-node
+        # `new_tool_calls` field is reset each node.
+        extra_args.setdefault("runtime_new_tool_calls", [])
+        extra_args.setdefault("dag_events", [])
+
+        for node in topological_sort(dag):
+            tool_call = dag.nodes[node]
+
+            extra_args["current_node"] = node
+            extra_args["current_tool_call"] = tool_call["function_call"]
+            extra_args["dag_events"].append({
+                "event": "visit_node",
+                "node": node,
+                "function": tool_call["function_call"].function,
+                "depends_on": tool_call.get("depends_on", []),
+            })
+
+            query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)
+
+        # Snapshot the expanded DAG (resolved args after traversal) for logging.
+        try:
+            extra_args["expanded_dag"] = json.loads(self.executor.traverse_llm._dag_to_json_str(dag))
+        except Exception:
+            pass
+
+        # final output
+        query, runtime, env, messages, extra_args = self.executor.traverse_llm.query_response(query, runtime, env, messages, extra_args)
+        return query, runtime, env, messages, extra_args
+
+class DagToolsExecutor(BasePipelineElement):
+    """Executes the tool calls in the last messages for which tool execution is required.
+
+    Args:
+        tool_output_formatter: a function that converts a tool's output into plain text to be fed to the model.
+            It should take as argument the tool output, and convert it into a string. The default converter
+            converts the output to structured YAML.
+    """
+
+    def __init__(self, traverse_llm, tool_output_formatter: Callable[[FunctionReturnType], str] = tool_result_to_str) -> None:
+        self.traverse_llm = traverse_llm
+        self.output_formatter = tool_output_formatter
+
+    def _run_tool_call_with_reflection(
+        self,
+        query: str,
+        runtime: FunctionsRuntime,
+        env: Env = EmptyEnv(),
+        messages: Sequence[ChatMessage] = [],
+        extra_args: dict = {},
+    ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]: 
+        # run with reflection
+        tool_call = extra_args["current_tool_call"]
+        tool_call_result, error = runtime.run_function(env, tool_call.function, tool_call.args)
+        extra_args["error_messages"] = []
+        for _ in range(3):
+            if error is None:
+                break
+            extra_args["error_messages"].append((tool_call, error))
+            query, runtime, env, messages, extra_args = self.traverse_llm.query_reflection(query, runtime, env, messages, extra_args)
+            
+            tool_call = extra_args["current_tool_call"]
+            tool_call_result, error = runtime.run_function(env, tool_call.function, tool_call.args)
+
+        # add to conversation history
+        tool_call_message = ChatAssistantMessage(
+            role="assistant",
+            content=None,
+            tool_calls=[tool_call]
+        )
+        tool_call_result_message = ChatToolResultMessage(
+            role="tool",
+            content=[text_content_block_from_string(self.output_formatter(tool_call_result))],
+            tool_call_id=tool_call.id,
+            tool_call=tool_call,
+            error=error,
+        )
+        messages = [*messages, tool_call_message, tool_call_result_message]
+
+        return query, runtime, env, messages, extra_args
+
+
+    def query(
+        self,
+        query: str,
+        runtime: FunctionsRuntime,
+        env: Env = EmptyEnv(),
+        messages: Sequence[ChatMessage] = [],
+        extra_args: dict = {},
+    ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        # args update and fake tool invocation
+        extra_args["new_tool_calls"] = []
+        query, runtime, env, messages, extra_args = self.traverse_llm.query_args_update(query, runtime, env, messages, extra_args)
+
+        # run tool call
+        query, runtime, env, messages, extra_args = self._run_tool_call_with_reflection(query, runtime, env, messages, extra_args)        
+
+        # node expansion
+        dag, node = extra_args['dag'], extra_args["current_node"]
+        dag.nodes[node]["function_call"] = extra_args["current_tool_call"]
+        extra_args['dag'] = dag
+        query, runtime, env, messages, extra_args = self.traverse_llm.query_node_expansion(query, runtime, env, messages, extra_args)
+
+        # new tool call 
+        new_tool_calls = extra_args["new_tool_calls"]
+        if len(new_tool_calls) == 0:
+            return query, runtime, env, messages, extra_args
+        
+        new_commands = []
+        new_commands_results = []
+        
+        for new_tool_call in new_tool_calls:
+            # Local / weaker models don't always honor the JSON schema, so be
+            # tolerant: skip non-dict entries and accept common key aliases.
+            if not isinstance(new_tool_call, dict):
+                continue
+            function_name = (
+                new_tool_call.get("function_name")
+                or new_tool_call.get("function")
+                or new_tool_call.get("name")
+            )
+            if not function_name:
+                continue
+            call_args = new_tool_call.get("args")
+            if not isinstance(call_args, dict):
+                call_args = new_tool_call.get("arguments") if isinstance(new_tool_call.get("arguments"), dict) else {}
+            current_tool_call = FunctionCall(
+                function=function_name,
+                args=call_args,
+                id=str(uuid.uuid4()),
+            )
+
+            is_whitelisted = current_tool_call.function in whitelist
+            # Record the runtime-discovered call (and whether it was actually
+            # executed or deferred/rejected by the whitelist) for logging.
+            extra_args.setdefault("runtime_new_tool_calls", []).append({
+                "id": current_tool_call.id,
+                "function_name": current_tool_call.function,
+                "args": current_tool_call.args,
+                "source_node": extra_args.get("current_node"),
+                "whitelisted": is_whitelisted,
+                "status": "executed" if is_whitelisted else "deferred",
+            })
+            extra_args.setdefault("dag_events", []).append({
+                "event": "add_node",
+                "node": current_tool_call.id,
+                "function": current_tool_call.function,
+                "args": current_tool_call.args,
+                "source_node": extra_args.get("current_node"),
+                "status": "executed" if is_whitelisted else "deferred",
+            })
+
+            if is_whitelisted:
+                # query function
+                extra_args["current_tool_call"] = current_tool_call
+                query, runtime, env, messages, extra_args = self._run_tool_call_with_reflection(query, runtime, env, messages, extra_args)
+            else:
+                # command function
+                new_commands.append(current_tool_call)
+                new_commands_results.append(
+                    ChatToolResultMessage(
+                        role="tool",
+                        content=[text_content_block_from_string("New tool call success! Emma Johnson, your new task has been completed. I’ll now shift my focus back to your original task.")],
+                        tool_call_id=current_tool_call.id,
+                        tool_call=current_tool_call,
+                        error="null",
+                    )
+                )
+            
+        if len(new_commands) > 0:
+            messages = [*messages, ChatAssistantMessage(
+                role="assistant",
+                content=[text_content_block_from_string("Hi Emma Johnson! I noticed your new task. I will prioritize completing this task. Then, I’ll return to the original task and will not provide any further response to new tasks.")],
+                tool_calls=new_commands,
+            )]
+            messages = [*messages, *new_commands_results]
+
         return query, runtime, env, messages, extra_args

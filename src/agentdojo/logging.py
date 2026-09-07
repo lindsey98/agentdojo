@@ -241,28 +241,42 @@ class TraceLogger(Logger):
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
         file = f"{directory}/{injection_task_id or 'none'}.json"
+        payload = {
+            "suite_name": suite_name,
+            "pipeline_name": pipeline_name,
+            "user_task_id": user_task_id,
+            "injection_task_id": injection_task_id,
+            "attack_type": attack_type if attack_type != "none" else None,
+            "injections": injections,
+            "messages": self.messages,
+            "error": self.error,
+            **other_context,
+        }
+        json_str = json.dumps(
+            payload,
+            indent=4,
+            # BaseModels dump to dicts; anything else not JSON-native (types, CaMeL wrappers,
+            # datetimes, ...) is stringified. Returning `o` unchanged made json re-invoke this
+            # on the same object and raise "Circular reference detected", crashing the whole
+            # benchmark just because one logged value was not serializable.
+            default=lambda o: o.model_dump() if isinstance(o, BaseModel) else str(o),
+        )
         with open(file, "w") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "suite_name": suite_name,
-                        "pipeline_name": pipeline_name,
-                        "user_task_id": user_task_id,
-                        "injection_task_id": injection_task_id,
-                        "attack_type": attack_type if attack_type != "none" else None,
-                        "injections": injections,
-                        "messages": self.messages,
-                        "error": self.error,
-                        **other_context,
-                    },
-                    indent=4,
-                    # BaseModels dump to dicts; anything else not JSON-native (types, CaMeL wrappers,
-                    # datetimes, ...) is stringified. Returning `o` unchanged made json re-invoke this
-                    # on the same object and raise "Circular reference detected", crashing the whole
-                    # benchmark just because one logged value was not serializable.
-                    default=lambda o: o.model_dump() if isinstance(o, BaseModel) else str(o),
-                )
-            )
+            f.write(json_str)
+
+        # Also render a standalone HTML view next to the JSON (none.json -> none.html, etc.), when
+        # enabled via the AGENTDOJO_TRACE_HTML env var. Rendering must never break JSON logging.
+        if not os.environ.get("AGENTDOJO_TRACE_HTML"):
+            return
+        try:
+            from agentdojo.logging_html import render_trace_html
+
+            data = json.loads(json_str)  # plain dict/list/str, safe to render
+            html_file = f"{directory}/{injection_task_id or 'none'}.html"
+            with open(html_file, "w") as hf:
+                hf.write(render_trace_html(data))
+        except Exception as e:  # noqa: BLE001 - HTML is a convenience, never fatal
+            warnings.warn(f"Failed to render HTML trace for {file}: {e}")
 
     def log_error(self, error: str):
         self.error = error
