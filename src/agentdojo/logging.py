@@ -256,7 +256,11 @@ class TraceLogger(Logger):
                         **other_context,
                     },
                     indent=4,
-                    default=lambda o: o.model_dump() if isinstance(o, BaseModel) else o,
+                    # BaseModels dump to dicts; anything else not JSON-native (types, CaMeL wrappers,
+                    # datetimes, ...) is stringified. Returning `o` unchanged made json re-invoke this
+                    # on the same object and raise "Circular reference detected", crashing the whole
+                    # benchmark just because one logged value was not serializable.
+                    default=lambda o: o.model_dump() if isinstance(o, BaseModel) else str(o),
                 )
             )
 
