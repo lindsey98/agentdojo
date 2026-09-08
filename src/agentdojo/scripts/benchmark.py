@@ -183,6 +183,108 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
         print(f"Average security: {avg_security * 100:.2f}%")
 
 
+def run_benchmark(
+    suites: tuple[str, ...],
+    model: ModelsEnum,
+    benchmark_version: str = "v1.2.2",
+    logdir: Path = Path("./runs"),
+    user_tasks: tuple[str, ...] = (),
+    injection_tasks: tuple[str, ...] = (),
+    model_id: str | None = None,
+    attack: str | None = None,
+    defense: str | None = None,
+    tool_delimiter: str = "tool",
+    system_message_name: str | None = None,
+    system_message: str | None = None,
+    max_workers: int = 1,
+    force_rerun: bool = False,
+    modules_to_load: tuple[str, ...] = (),
+    agent: str | None = None,
+):
+    for module in modules_to_load:
+        importlib.import_module(module)
+
+    # Warn about ignored options when using --agent
+    if agent is not None and defense is not None:
+        warnings.warn(
+            f"--defense '{defense}' is ignored when --agent is specified. "
+            f"The agent '{agent}' will use its own configuration."
+        )
+
+    if len(suites) == 0:
+        suites = tuple(get_suites(benchmark_version).keys())
+
+    if len(suites) != 1:
+        print(f"Benchmarking suites {', '.join(suites)}")
+
+    if len(suites) != 1 and len(user_tasks) != 0:
+        raise ValueError("A user task can be specified only when one suite is being executed")
+
+    if max_workers == 1:
+        results = {}
+        for suite_name in suites:
+            suite = get_suite(benchmark_version, suite_name)
+            results[suite_name] = benchmark_suite(
+                suite,
+                model,
+                logdir,
+                force_rerun,
+                benchmark_version,
+                user_tasks=user_tasks,
+                injection_tasks=injection_tasks,
+                model_id=model_id,
+                attack=attack,
+                defense=defense,
+                tool_delimiter=tool_delimiter,
+                system_message_name=system_message_name,
+                system_message=system_message,
+                agent=agent,
+            )
+        combined_results = SuiteResults(utility_results={}, security_results={}, injection_tasks_utility_results={})
+        for suite_name, result in results.items():
+            show_results(suite_name, result, attack is not None)
+            for user_task, injection_task in result["utility_results"]:
+                new_user_task = suite_name + "_" + user_task
+                combined_results["utility_results"][(new_user_task, injection_task)] = result["utility_results"][
+                    (user_task, injection_task)
+                ]
+            for user_task, injection_task in result["security_results"]:
+                new_user_task = suite_name + "_" + user_task
+                combined_results["security_results"][(new_user_task, injection_task)] = result["security_results"][
+                    (user_task, injection_task)
+                ]
+            for injection_task in result["injection_tasks_utility_results"]:
+                new_injection_task = suite_name + "_" + injection_task
+                combined_results["injection_tasks_utility_results"][new_injection_task] = result[
+                    "injection_tasks_utility_results"
+                ][injection_task]
+        show_results("combined", combined_results, attack is not None)
+    return
+
+    with Pool(max_workers) as p:
+        arguments = zip(
+            suites,
+            repeat(model),
+            repeat(logdir),
+            repeat(user_tasks),
+            repeat(injection_tasks),
+            repeat(model_id),
+            repeat(attack),
+            repeat(defense),
+            repeat(tool_delimiter),
+            repeat(system_message_name),
+            repeat(system_message),
+            repeat(force_rerun),
+            repeat(agent),
+        )
+        results = p.starmap(benchmark_suite, arguments)
+
+    for suite_name, result in zip(suites, results):
+        show_results(suite_name, result, attack is not None)
+
+
+
+
 @click.command()
 @click.option(
     "--model",
@@ -293,108 +395,6 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
     help="Agent name to load from agents/ directory. If not provided, "
          "creates pipeline from --model and --defense options.",
 )
-def run_benchmark(
-    suites: tuple[str, ...],
-    model: ModelsEnum,
-    benchmark_version: str = "v1.2.2",
-    logdir: Path = Path("./runs"),
-    user_tasks: tuple[str, ...] = (),
-    injection_tasks: tuple[str, ...] = (),
-    model_id: str | None = None,
-    attack: str | None = None,
-    defense: str | None = None,
-    tool_delimiter: str = "tool",
-    system_message_name: str | None = None,
-    system_message: str | None = None,
-    max_workers: int = 1,
-    force_rerun: bool = False,
-    modules_to_load: tuple[str, ...] = (),
-    agent: str | None = None,
-):
-    for module in modules_to_load:
-        importlib.import_module(module)
-
-    # Warn about ignored options when using --agent
-    if agent is not None and defense is not None:
-        warnings.warn(
-            f"--defense '{defense}' is ignored when --agent is specified. "
-            f"The agent '{agent}' will use its own configuration."
-        )
-
-    if len(suites) == 0:
-        suites = tuple(get_suites(benchmark_version).keys())
-
-    if len(suites) != 1:
-        print(f"Benchmarking suites {', '.join(suites)}")
-
-    if len(suites) != 1 and len(user_tasks) != 0:
-        raise ValueError("A user task can be specified only when one suite is being executed")
-
-    if max_workers == 1:
-        results = {}
-        for suite_name in suites:
-            suite = get_suite(benchmark_version, suite_name)
-            results[suite_name] = benchmark_suite(
-                suite,
-                model,
-                logdir,
-                force_rerun,
-                benchmark_version,
-                user_tasks=user_tasks,
-                injection_tasks=injection_tasks,
-                model_id=model_id,
-                attack=attack,
-                defense=defense,
-                tool_delimiter=tool_delimiter,
-                system_message_name=system_message_name,
-                system_message=system_message,
-                agent=agent,
-            )
-        combined_results = SuiteResults(utility_results={}, security_results={}, injection_tasks_utility_results={})
-        for suite_name, result in results.items():
-            show_results(suite_name, result, attack is not None)
-            for user_task, injection_task in result["utility_results"]:
-                new_user_task = suite_name + "_" + user_task
-                combined_results["utility_results"][(new_user_task, injection_task)] = result["utility_results"][
-                    (user_task, injection_task)
-                ]
-            for user_task, injection_task in result["security_results"]:
-                new_user_task = suite_name + "_" + user_task
-                combined_results["security_results"][(new_user_task, injection_task)] = result["security_results"][
-                    (user_task, injection_task)
-                ]
-            for injection_task in result["injection_tasks_utility_results"]:
-                new_injection_task = suite_name + "_" + injection_task
-                combined_results["injection_tasks_utility_results"][new_injection_task] = result[
-                    "injection_tasks_utility_results"
-                ][injection_task]
-        show_results("combined", combined_results, attack is not None)
-    return
-
-    with Pool(max_workers) as p:
-        arguments = zip(
-            suites,
-            repeat(model),
-            repeat(logdir),
-            repeat(user_tasks),
-            repeat(injection_tasks),
-            repeat(model_id),
-            repeat(attack),
-            repeat(defense),
-            repeat(tool_delimiter),
-            repeat(system_message_name),
-            repeat(system_message),
-            repeat(force_rerun),
-            repeat(agent),
-        )
-        results = p.starmap(benchmark_suite, arguments)
-
-    for suite_name, result in zip(suites, results):
-        show_results(suite_name, result, attack is not None)
-
-
-
-
 def main(
     suites: tuple[str, ...],
     model: ModelsEnum,
