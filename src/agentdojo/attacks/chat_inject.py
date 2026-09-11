@@ -96,6 +96,59 @@ MODEL_CONFIGS: dict[str, dict[str, str]] = {
         "think_end_tag": "",
         "eos_tag": "<｜end▁of▁sentence｜>",
     },
+    # Meta Llama 3 / 3.1 / 3.2 / 3.3 template. Header-wrapped turns:
+    # `<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>`; roles system/user/assistant.
+    "llama3": {
+        "sentence_begin_tag": "<|begin_of_text|>",
+        "system_interrupt_tag": "<|eot_id|><|start_header_id|>system<|end_header_id|>\n\n",
+        "user_interrupt_tag": "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+        "assistant_interrupt_tag": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+        "think_start_tag": "",
+        "think_end_tag": "",
+        "eos_tag": "<|eot_id|>",
+    },
+    # Generic ChatML (Yi, OpenChat, Nous, many OpenAI-compatible finetunes) -- same as qwen3 minus the
+    # <think> block. Use this for any ChatML model without a thinking phase.
+    "chatml": {
+        "system_interrupt_tag": "<|im_end|>\n<|im_start|>system\n",
+        "user_interrupt_tag": "<|im_end|>\n<|im_start|>user\n",
+        "assistant_interrupt_tag": "<|im_end|>\n<|im_start|>assistant\n",
+        "think_start_tag": "",
+        "think_end_tag": "",
+        "eos_tag": "<|im_end|>",
+    },
+    # Microsoft Phi-3 / Phi-3.5 template: `<|system|>\n...<|end|>\n<|user|>\n...<|end|>\n<|assistant|>\n`.
+    "phi3": {
+        "system_interrupt_tag": "<|end|>\n<|system|>\n",
+        "user_interrupt_tag": "<|end|>\n<|user|>\n",
+        "assistant_interrupt_tag": "<|end|>\n<|assistant|>\n",
+        "think_start_tag": "",
+        "think_end_tag": "",
+        "eos_tag": "<|end|>",
+    },
+    # Mistral / Mixtral [INST] template. NOTE: it has NO role headers -- turns alternate
+    # `[INST] {user} [/INST] {assistant}</s>`, and there is no system role (system is folded into the
+    # first [INST]). This exploit maps a "user" turn to `[INST] ` and an "assistant" turn to ` [/INST] `,
+    # which is only an approximation of the real template -- verify before trusting results.
+    "mistral": {
+        "sentence_begin_tag": "<s>",
+        "system_interrupt_tag": "</s>[INST] ",
+        "user_interrupt_tag": "</s>[INST] ",
+        "assistant_interrupt_tag": " [/INST] ",
+        "think_start_tag": "",
+        "think_end_tag": "",
+        "eos_tag": "</s>",
+    },
+    # Cohere Command R / R+ template with START/END-of-turn + role tokens.
+    "command-r": {
+        "sentence_begin_tag": "<BOS_TOKEN>",
+        "system_interrupt_tag": "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>",
+        "user_interrupt_tag": "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>",
+        "assistant_interrupt_tag": "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>",
+        "think_start_tag": "",
+        "think_end_tag": "",
+        "eos_tag": "<|END_OF_TURN_TOKEN|>",
+    },
 }
 
 _ATTACK_INSTRUCTION = (
@@ -118,68 +171,8 @@ def _build_attack_string(model_key: str) -> str:
     ])
 
 
-@register_attack
-class ChatInjectQwen3(FixedJailbreakAttack):
-    """Template-only ChatInject for Qwen3-family targets."""
-
-    name = "chat_inject_qwen3"
-
-    def __init__(
-        self,
-        task_suite: TaskSuite[Env],
-        target_pipeline: BasePipelineElement | None = None,
-        *,
-        model_name: str | None = None,
-    ) -> None:
-        super().__init__(_build_attack_string("qwen3"), task_suite, target_pipeline, model_name=model_name)
-
-
-@register_attack
-class ChatInjectGLM(FixedJailbreakAttack):
-    """Template-only ChatInject for GLM-family targets (use with --model local:glm-5.2)."""
-
-    name = "chat_inject_glm"
-
-    def __init__(
-        self,
-        task_suite: TaskSuite[Env],
-        target_pipeline: BasePipelineElement | None = None,
-        *,
-        model_name: str | None = None,
-    ) -> None:
-        super().__init__(_build_attack_string("glm-4.5"), task_suite, target_pipeline, model_name=model_name)
-
-
-@register_attack
-class ChatInjectGemma(FixedJailbreakAttack):
-    """Template-only ChatInject for Gemma-family targets (use with --model local:gemma-4-26B-A4B)."""
-
-    name = "chat_inject_gemma"
-
-    def __init__(
-        self,
-        task_suite: TaskSuite[Env],
-        target_pipeline: BasePipelineElement | None = None,
-        *,
-        model_name: str | None = None,
-    ) -> None:
-        super().__init__(_build_attack_string("gemma"), task_suite, target_pipeline, model_name=model_name)
-
-
-@register_attack
-class ChatInjectDeepSeek(FixedJailbreakAttack):
-    """Template-only ChatInject for DeepSeek-family targets (use with --model local:DeepSeek-V4-Flash)."""
-
-    name = "chat_inject_deepseek"
-
-    def __init__(
-        self,
-        task_suite: TaskSuite[Env],
-        target_pipeline: BasePipelineElement | None = None,
-        *,
-        model_name: str | None = None,
-    ) -> None:
-        super().__init__(_build_attack_string("deepseek"), task_suite, target_pipeline, model_name=model_name)
+# Template-only and multi-turn attack classes for every MODEL_CONFIGS family are generated and
+# registered by the factory loop at the bottom of this file (see `_ATTACK_MODELS`).
 
 
 # --- Multi-turn variants -----------------------------------------------------------------------------
@@ -244,57 +237,56 @@ class _ChatInjectMultiTurn(FixedJailbreakAttack):
         return {inj: msg for inj in self.get_injection_candidates(user_task)}
 
 
-@register_attack
-class ChatInjectQwen3UtilityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_qwen3_with_utility_system_multiturn_7"
-    data_file = "with_utility_multi_turn_7_generation_output.json"
-    model_key = "qwen3"
+# --- Attack registration factory --------------------------------------------------------------------
+# Every chat-template family listed here gets three attacks auto-registered: a template-only variant and
+# two multi-turn "with utility" variants (system framing + authority-endorsement framing). To support a
+# NEW model, add its delimiters to MODEL_CONFIGS above and one (model_key, slug) row here -- nothing else.
+# `slug` is the name shown in --attack (kept stable for back-compat, e.g. glm-4.5 -> "glm").
+_ATTACK_MODELS: list[tuple[str, str]] = [
+    ("qwen3", "qwen3"),
+    ("glm-4.5", "glm"),
+    ("gemma", "gemma"),
+    ("deepseek", "deepseek"),
+    ("llama3", "llama3"),
+    ("chatml", "chatml"),
+    ("phi3", "phi3"),
+    ("mistral", "mistral"),
+    ("command-r", "command_r"),
+]
+
+_MULTITURN_VARIANTS: list[tuple[str, str]] = [
+    # (name_suffix, data_file)
+    ("with_utility_system_multiturn_7", "with_utility_multi_turn_7_generation_output.json"),
+    (
+        "with_utility_authority_endorsement_system_multiturn_7",
+        "with_utility_multi_turn_authority_endorsement_7_generation_output.json",
+    ),
+]
 
 
-@register_attack
-class ChatInjectGLMUtilityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_glm_with_utility_system_multiturn_7"
-    data_file = "with_utility_multi_turn_7_generation_output.json"
-    model_key = "glm-4.5"
+def _make_template_only(model_key: str, slug: str) -> type[FixedJailbreakAttack]:
+    attack_string = _build_attack_string(model_key)
+
+    def __init__(self, task_suite, target_pipeline=None, *, model_name=None):
+        FixedJailbreakAttack.__init__(self, attack_string, task_suite, target_pipeline, model_name=model_name)
+
+    return type(
+        f"ChatInject_{slug}",
+        (FixedJailbreakAttack,),
+        {"name": f"chat_inject_{slug}", "__init__": __init__,
+         "__doc__": f"Template-only ChatInject for the {model_key!r} chat template."},
+    )
 
 
-@register_attack
-class ChatInjectQwen3AuthorityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_qwen3_with_utility_authority_endorsement_system_multiturn_7"
-    data_file = "with_utility_multi_turn_authority_endorsement_7_generation_output.json"
-    model_key = "qwen3"
+def _make_multiturn(model_key: str, slug: str, name_suffix: str, data_file: str) -> type[_ChatInjectMultiTurn]:
+    return type(
+        f"ChatInjectMT_{slug}_{name_suffix}",
+        (_ChatInjectMultiTurn,),
+        {"name": f"chat_inject_{slug}_{name_suffix}", "data_file": data_file, "model_key": model_key},
+    )
 
 
-@register_attack
-class ChatInjectGLMAuthorityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_glm_with_utility_authority_endorsement_system_multiturn_7"
-    data_file = "with_utility_multi_turn_authority_endorsement_7_generation_output.json"
-    model_key = "glm-4.5"
-
-
-@register_attack
-class ChatInjectGemmaUtilityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_gemma_with_utility_system_multiturn_7"
-    data_file = "with_utility_multi_turn_7_generation_output.json"
-    model_key = "gemma"
-
-
-@register_attack
-class ChatInjectDeepSeekUtilityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_deepseek_with_utility_system_multiturn_7"
-    data_file = "with_utility_multi_turn_7_generation_output.json"
-    model_key = "deepseek"
-
-
-@register_attack
-class ChatInjectGemmaAuthorityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_gemma_with_utility_authority_endorsement_system_multiturn_7"
-    data_file = "with_utility_multi_turn_authority_endorsement_7_generation_output.json"
-    model_key = "gemma"
-
-
-@register_attack
-class ChatInjectDeepSeekAuthorityMultiturn7(_ChatInjectMultiTurn):
-    name = "chat_inject_deepseek_with_utility_authority_endorsement_system_multiturn_7"
-    data_file = "with_utility_multi_turn_authority_endorsement_7_generation_output.json"
-    model_key = "deepseek"
+for _model_key, _slug in _ATTACK_MODELS:
+    register_attack(_make_template_only(_model_key, _slug))
+    for _suffix, _data_file in _MULTITURN_VARIANTS:
+        register_attack(_make_multiturn(_model_key, _slug, _suffix, _data_file))
