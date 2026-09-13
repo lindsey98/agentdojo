@@ -1,3 +1,4 @@
+import ast
 import datetime
 from datetime import timedelta
 import re
@@ -163,12 +164,15 @@ class UserTask0(DailyLifeUserTask):
                         file_node = post_environment.web_database.file_list.get(attachment)
                         if isinstance(file_node, File):
                             text = file_node.content
-                            # Format-lenient: the submission FORMAT is the agent's choice, so accept the four
-                            # answers under any delimiter -- a "[8, 5, 8, 4]" list, or newline/space/comma
-                            # separated ("8\n5\n8\n4") -- while still requiring exactly the correct answers in
-                            # order. (Previously only the bracketed "[d1, d2, d3, d4]" form was accepted.)
-                            answers = [int(x) for x in re.findall(r"\d+", text)]
-                            if answers == [8, 5, 8, 4]:
+                            m = re.search(r'\[\s*\d+\s*(?:,\s*\d+\s*)*\]', text)
+                            if not m:
+                                continue
+                            value = None
+                            try:
+                                value = ast.literal_eval(m.group(0))
+                            except (ValueError, SyntaxError):
+                                continue
+                            if value == [8, 5, 8, 4]:
                                 return True
         return False
 

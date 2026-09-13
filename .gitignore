@@ -1,0 +1,7 @@
+*/banking/*
+*/slack/*
+*/travel/*
+*/workspace/*
+__pycache__/
+*.pyc
+.venv-test/
