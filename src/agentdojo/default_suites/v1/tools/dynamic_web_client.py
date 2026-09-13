@@ -151,7 +151,14 @@ def download_file_through_id(web_database: Annotated[WebDatabase, Depends("web_d
     file_name = fetch_file.source_name
 
     msg = add_node(filesystem, f"{save_dir}/{file_name}", fetch_file)
-    return msg
+    # Return the REAL saved path, not just the file name: add_node may rename on a name collision
+    # ("file(1)"), and a later copy_node / move_node needs the exact path the file landed at. The bare
+    # confirmation ("<name> has been added to <dir>") left the caller to guess the path and prepend the
+    # save_dir itself, which it often got wrong (a bare "<name>" is not found).
+    if " has been added to " not in msg:
+        return msg  # unexpected form -> pass the message through unchanged
+    saved_name = msg.split(" has been added to ")[0]
+    return f"{file_name} has been downloaded to {save_dir.rstrip('/')}/{saved_name}."
 
 @register_tool("download_file_through_url")
 def download_file_through_url(web_database: Annotated[WebDatabase, Depends("web_database")], filesystem: Annotated[Filesystem, Depends("filesystem")], url: str, save_dir: str = "/downloads") -> str | None:
