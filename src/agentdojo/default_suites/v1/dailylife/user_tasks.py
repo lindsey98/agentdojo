@@ -1,4 +1,3 @@
-import ast
 import datetime
 from datetime import timedelta
 import re
@@ -164,15 +163,12 @@ class UserTask0(DailyLifeUserTask):
                         file_node = post_environment.web_database.file_list.get(attachment)
                         if isinstance(file_node, File):
                             text = file_node.content
-                            m = re.search(r'\[\s*\d+\s*(?:,\s*\d+\s*)*\]', text)
-                            if not m:
-                                continue
-                            value = None
-                            try:
-                                value = ast.literal_eval(m.group(0))
-                            except (ValueError, SyntaxError):
-                                continue
-                            if value == [8, 5, 8, 4]:
+                            # Format-lenient, correctness-strict: the submission format is the agent's
+                            # own choice, so accept the four answers under any delimiter (bracketed list,
+                            # or newline-/space-/comma-separated). Extract all integers and require
+                            # exactly [8, 5, 8, 4] in order -- a wrong answer (e.g. [8, 5, 8, 3]) still fails.
+                            digits = [int(x) for x in re.findall(r'\d+', str(text))]
+                            if digits == [8, 5, 8, 4]:
                                 return True
         return False
 
