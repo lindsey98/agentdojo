@@ -1,17 +1,19 @@
-"""Declarative registry of the OTP verification gates enforced by the dynamic-suite tools.
+"""Declarative registry of the ENV-ENFORCED gates on the dynamic-suite tools.
 
-Several state-changing tools refuse to execute until the account is verified: the unverified call emails a
-one-time password (OTP), stashes the pending action, and returns "please verify"; a ``verify_*`` call with
-that code then commits it. Today these gates live only inside the tool bodies -- each calls
-``send_otp_to_inbox`` and stashes into ``verification_stack[otp]`` -- so a consumer (a defense, an analysis,
-a benchmark harness) has to reverse-engineer the implementations to learn which tools are gated.
+A gate is a check a tool applies before it will do its work; when unmet, the tool refuses and tells the caller
+what to do first. Today these gates live only inside the tool bodies, so a consumer (a defense, an analysis, a
+benchmark harness) has to reverse-engineer them. This module declares them as data. The tests in
+``tests/test_verification_gates.py`` assert each kind stays in sync with the code, so it cannot silently drift.
 
-This module declares them as data, so they can be enumerated directly. ``tests/test_verification_gates.py``
-asserts the registry stays in sync with the code, so it cannot silently drift.
+Three kinds:
+  - ``VERIFICATION_GATES``  -- an OTP the tool emails and a ``verify_*`` call must submit before the action
+    commits (the unverified call only emails the code and stashes the pending action).
+  - ``PRECONDITION_GATES``  -- a prior action the tool requires: a repo must be cloned (which writes a
+    ``.git_config``) before ``git_push`` / ``git_pull`` operate on it.
+  - ``CONFLICT_GATES``      -- ``git_push`` / ``git_pull`` refuse on a content conflict until you sync the
+    other way or force it.
 
-Extracted from ``shopping_client.py`` / ``github_client.py`` and ``dailylife/task_suite.py``. ``send_money``
-appears twice: it is defined in both the shopping and dailylife suites, which email the OTP to different
-inboxes.
+Extracted from ``shopping_client.py`` / ``github_client.py`` and ``dailylife/task_suite.py``.
 """
 
 from dataclasses import dataclass
@@ -19,7 +21,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class VerificationGate:
-    """One OTP-gated tool.
+    """An OTP-gated tool.
 
     :param tool: the gated tool's registered name.
     :param verify_tool: the tool that submits the OTP and commits the pending action.
@@ -33,6 +35,34 @@ class VerificationGate:
     condition: str = "always"
 
 
+@dataclass(frozen=True)
+class PreconditionGate:
+    """A tool that refuses until a prior action is taken.
+
+    :param tool: the gated tool's registered name.
+    :param requires: the action that satisfies the precondition (human-readable).
+    :param message: a substring of the refusal the tool returns when the precondition is unmet.
+    """
+
+    tool: str
+    requires: str
+    message: str
+
+
+@dataclass(frozen=True)
+class ConflictGate:
+    """A tool that refuses on a content conflict until it is resolved.
+
+    :param tool: the gated tool's registered name.
+    :param resolution: how to resolve the conflict (human-readable).
+    :param message: a substring of the refusal the tool returns on a conflict.
+    """
+
+    tool: str
+    resolution: str
+    message: str
+
+
 VERIFICATION_GATES: list[VerificationGate] = [
     # shopping
     VerificationGate("checkout_selected_cart", "verify_shopping_account", "get_shopping_linked_unread_emails"),
@@ -40,8 +70,9 @@ VERIFICATION_GATES: list[VerificationGate] = [
     VerificationGate(
         "update_shopping_account_password", "verify_shopping_account", "get_shopping_linked_unread_emails"
     ),
+    # send_money is gated only for amount > 500; the linked inbox differs by suite (shopping vs dailylife).
     VerificationGate("send_money", "verify_transaction", "get_shopping_linked_unread_emails", "amount > 500"),
-    # github
+    # github (all gated unconditionally)
     VerificationGate("git_create_repo", "verify_github_account", "get_github_linked_unread_emails"),
     VerificationGate("git_delete_repo", "verify_github_account", "get_github_linked_unread_emails"),
     VerificationGate("git_transfer_repo_ownership", "verify_github_account", "get_github_linked_unread_emails"),
@@ -54,7 +85,18 @@ VERIFICATION_GATES: list[VerificationGate] = [
     VerificationGate("send_money", "verify_transaction", "get_unread_emails", "amount > 500"),
 ]
 
+PRECONDITION_GATES: list[PreconditionGate] = [
+    # git_clone writes a .git_config into the local repo; push/pull upward-search for it and refuse without it.
+    PreconditionGate("git_push", "git_clone the repository first", "not inside a cloned GitHub repository"),
+    PreconditionGate("git_pull", "git_clone the repository first", "Please navigate into a cloned repository"),
+]
+
+CONFLICT_GATES: list[ConflictGate] = [
+    ConflictGate("git_push", "git_pull first, or call git_push with force=True", "Conflict detected"),
+    ConflictGate("git_pull", "git_push first, or call git_pull with overwrite_local=True", "Conflict detected"),
+]
+
 
 def gated_tools() -> set[str]:
-    """The set of tool names that are OTP-gated (deduplicated across suites)."""
+    """The set of tool names carrying an OTP verification gate (deduplicated across suites)."""
     return {g.tool for g in VERIFICATION_GATES}
