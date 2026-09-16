@@ -125,6 +125,26 @@ def _add_repo_to_syspath(repo_name: str, src_subdir: str | None = None) -> Path:
     return repo_path
 
 
+def _record_progent_policy() -> None:
+    """Record Progent's current per-task security policy (and update trace) into the active task
+    logger, so it lands in the trace JSON under ``security_policy`` / ``policy_trace``. Progent
+    *enforces* the policy regardless; this only makes it visible in the logs. No-op outside a
+    benchmark run or if secagent does not expose the accessors."""
+    try:
+        _add_repo_to_syspath("progent")
+        from secagent import get_generated_policy, get_policy_trace  # type: ignore
+    except Exception:
+        return
+    logger = Logger.get()
+    if not hasattr(logger, "set_contextarg"):
+        return
+    try:
+        logger.set_contextarg("security_policy", get_generated_policy())
+        logger.set_contextarg("policy_trace", get_policy_trace())
+    except Exception:
+        pass
+
+
 class ProgentPolicyBootstrap(BasePipelineElement):
     def __init__(self, suite_name: str | None) -> None:
         self._tools_initialized = False
@@ -264,6 +284,7 @@ class ProgentPolicyBootstrap(BasePipelineElement):
         from secagent import generate_security_policy  # type: ignore
 
         generate_security_policy(query)
+        _record_progent_policy()
 
         runtime_id = id(runtime)
         if runtime_id not in self._wrapped_runtime_ids:
@@ -285,6 +306,7 @@ class ProgentPolicyBootstrap(BasePipelineElement):
                         str([str(result)]),
                         manual_check=False,
                     )
+                    _record_progent_policy()
                 return result, error
 
             runtime.run_function = MethodType(guarded_run_function, runtime)
