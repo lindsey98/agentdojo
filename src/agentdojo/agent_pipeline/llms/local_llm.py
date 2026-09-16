@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionCall, FunctionsRuntime
+from agentdojo.logging import Logger
 from agentdojo.types import ChatAssistantMessage, ChatMessage, get_text_content_as_str, text_content_block_from_string
 
 
@@ -54,17 +55,21 @@ def chat_completion_request(
         for message in messages:
             content = reformat_message(message)
             reformatted_messages.append({"role": message["role"], "content": content})
-        response = (
-            client.chat.completions.create(
-                model=model,
-                messages=reformatted_messages,
-                temperature=temperature,
-                top_p=top_p,
-                seed=random.randint(0, 1000000),
-            )
-            .choices[0]
-            .message.content
+        completion = client.chat.completions.create(
+            model=model,
+            messages=reformatted_messages,
+            temperature=temperature,
+            top_p=top_p,
+            seed=random.randint(0, 1000000),
         )
+        usage = getattr(completion, "usage", None)
+        if usage is not None:
+            Logger.get().log_tokens(
+                prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                total_tokens=getattr(usage, "total_tokens", None),
+            )
+        response = completion.choices[0].message.content
     except Exception as e:
         print(f"[debug] error: {e}")
         response = ""

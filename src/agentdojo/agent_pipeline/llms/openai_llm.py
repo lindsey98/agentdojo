@@ -23,6 +23,7 @@ from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wai
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionCall, FunctionsRuntime
+from agentdojo.logging import Logger
 from agentdojo.types import (
     ChatAssistantMessage,
     ChatMessage,
@@ -163,6 +164,18 @@ def _function_to_openai(f: Function) -> ChatCompletionToolParam:
     return ChatCompletionToolParam(type="function", function=function_definition)
 
 
+def _log_openai_usage(completion) -> None:
+    """Report an OpenAI-style completion's token usage to the active logger."""
+    usage = getattr(completion, "usage", None)
+    if usage is None:
+        return
+    Logger.get().log_tokens(
+        prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        total_tokens=getattr(usage, "total_tokens", None),
+    )
+
+
 @retry(
     wait=wait_random_exponential(multiplier=1, max=40),
     stop=stop_after_attempt(3),
@@ -222,6 +235,7 @@ class OpenAILLM(BasePipelineElement):
         completion = chat_completion_request(
             self.client, self.model, openai_messages, openai_tools, self.reasoning_effort, self.temperature
         )
+        _log_openai_usage(completion)
         output = _openai_to_assistant_message(completion.choices[0].message)
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args
@@ -258,6 +272,7 @@ class OpenAILLMToolFilter(BasePipelineElement):
             ),
             reasoning_effort=self.reasoning_effort or NOT_GIVEN,
         )
+        _log_openai_usage(completion)
         output = _openai_to_assistant_message(completion.choices[0].message)
 
         new_tools = {}

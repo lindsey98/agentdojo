@@ -32,6 +32,12 @@ class Logger:
             return NullLogger()
         return loggers[-1]
 
+    def log_tokens(self, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int | None = None):
+        """Report the token usage of one LLM call to the active logger. No-op by default;
+        TraceLogger accumulates it per task. LLM pipeline elements call
+        `Logger.get().log_tokens(...)` after each completion."""
+        pass
+
 
 class NullLogger(Logger):
     messages: list[ChatMessage]
@@ -172,6 +178,9 @@ class TraceLogger(Logger):
         self.delegate.messages = []
         self.error: str | None = None
         self.start = None
+        # Per-task token accounting, accumulated across the task's LLM calls.
+        # n_calls == 0 means no call reported usage (e.g. a provider that doesn't track it).
+        self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "n_calls": 0}
 
         # Add timestamp of evaluation
         self.context["evaluation_timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -197,6 +206,14 @@ class TraceLogger(Logger):
             self.set_contextarg("duration", None)
 
         return super().__exit__(exc_type, exc_value, traceback)
+
+    def log_tokens(self, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int | None = None):
+        p = int(prompt_tokens or 0)
+        c = int(completion_tokens or 0)
+        self.token_usage["prompt_tokens"] += p
+        self.token_usage["completion_tokens"] += c
+        self.token_usage["total_tokens"] += int(total_tokens) if total_tokens is not None else (p + c)
+        self.token_usage["n_calls"] += 1
 
     def set_contextarg(self, key, value):
         self.context[key] = value
@@ -250,6 +267,7 @@ class TraceLogger(Logger):
             "injections": injections,
             "messages": self.messages,
             "error": self.error,
+            "token_usage": self.token_usage,
             **other_context,
         }
         json_str = json.dumps(
