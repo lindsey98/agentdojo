@@ -216,6 +216,20 @@ def _google_to_assistant_message(message: genai_types.GenerateContentResponse) -
     return ChatAssistantMessage(role="assistant", content=text_parts, tool_calls=tool_calls)
 
 
+def _log_google_usage(completion) -> None:
+    """Report a Google (Gemini) completion's token usage to the active logger."""
+    from agentdojo.logging import Logger
+
+    usage = getattr(completion, "usage_metadata", None)
+    if usage is None:
+        return
+    Logger.get().log_tokens(
+        prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
+        completion_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+        total_tokens=getattr(usage, "total_token_count", None),
+    )
+
+
 class GoogleLLM(BasePipelineElement):
     """LLM pipeline element that uses Google Vertex AI (i.e. Gemini models).
 
@@ -293,6 +307,7 @@ class GoogleLLM(BasePipelineElement):
             google_messages,  # type: ignore
             generation_config=generation_config,
         )
+        _log_google_usage(completion)
         output = _google_to_assistant_message(completion)
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args

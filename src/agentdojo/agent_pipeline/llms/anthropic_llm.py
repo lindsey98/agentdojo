@@ -209,6 +209,19 @@ async def chat_completion_request(
         return await stream.get_final_message()
 
 
+def _log_anthropic_usage(completion) -> None:
+    """Report an Anthropic completion's token usage to the active logger."""
+    from agentdojo.logging import Logger
+
+    usage = getattr(completion, "usage", None)
+    if usage is None:
+        return
+    Logger.get().log_tokens(
+        prompt_tokens=getattr(usage, "input_tokens", 0) or 0,
+        completion_tokens=getattr(usage, "output_tokens", 0) or 0,
+    )
+
+
 class AnthropicLLM(BasePipelineElement):
     """LLM pipeline element using Anthropic's API. Supports Claude Opus, Sonnet, and Haiku models.
 
@@ -310,6 +323,7 @@ parameters. DO NOT ask for more information on optional parameters if it is not 
                 thinking_budget_tokens=self.thinking_budget_tokens,
             )
         )
+        _log_anthropic_usage(completion)
         output = _anthropic_to_assistant_message(completion)
         if output["tool_calls"] is not None:
             invalid_tool_calls: list[int] = []
