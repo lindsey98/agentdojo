@@ -30,6 +30,7 @@ from agentdojo.ast_utils import (
     parse_tool_calls_from_python_function,
 )
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionsRuntime, FunctionCall
+from agentdojo.logging import record_token_usage
 from agentdojo.types import ChatAssistantMessage, ChatMessage, ChatSystemMessage, ChatToolResultMessage, ChatUserMessage, get_text_content_as_str, text_content_block_from_string
 
 from agentdojo.default_suites.v1.tools.tool_white_list import whitelist
@@ -94,7 +95,11 @@ def chat_completion_request(
     if json_format:
         create_kwargs["response_format"] = {"type": "json_object"}
 
-    return client.chat.completions.create(**create_kwargs)
+    completion = client.chat.completions.create(**create_kwargs)
+    # Report usage into the unified per-task token_usage field (same mechanism as the other LLMs),
+    # so IPIGuard runs are directly comparable with the baseline/other defenses.
+    record_token_usage(getattr(completion, "usage", None))
+    return completion
 
 
 class MalformedModelOutputError(Exception):
