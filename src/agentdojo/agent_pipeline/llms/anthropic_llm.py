@@ -21,6 +21,7 @@ from typing_extensions import deprecated
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionCall, FunctionsRuntime
+from agentdojo.logging import record_token_usage
 from agentdojo.types import (
     ChatAssistantMessage,
     ChatMessage,
@@ -310,6 +311,7 @@ parameters. DO NOT ask for more information on optional parameters if it is not 
                 thinking_budget_tokens=self.thinking_budget_tokens,
             )
         )
+        record_token_usage(getattr(completion, "usage", None))
         output = _anthropic_to_assistant_message(completion)
         if output["tool_calls"] is not None:
             invalid_tool_calls: list[int] = []

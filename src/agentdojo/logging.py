@@ -51,6 +51,39 @@ class NullLogger(Logger):
         pass
 
 
+def record_token_usage(usage) -> None:
+    """Accumulate one LLM call's token usage into the active task logger's context, so it lands in
+    the per-task JSON under ``token_usage`` (prompt/completion/total tokens + num_calls).
+
+    Accepts an OpenAI-style usage object/dict (``prompt_tokens``/``completion_tokens``/
+    ``total_tokens``) or an Anthropic-style one (``input_tokens``/``output_tokens``). Because it goes
+    through the shared LLM elements, this also captures a defense's extra calls (e.g. MELON's masked
+    and original runs). No-op when there is no active task logger (e.g. outside a benchmark run).
+    """
+    if usage is None:
+        return
+
+    def _f(name):
+        return usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
+
+    prompt = _f("prompt_tokens")
+    prompt = int((prompt if prompt is not None else _f("input_tokens")) or 0)
+    completion = _f("completion_tokens")
+    completion = int((completion if completion is not None else _f("output_tokens")) or 0)
+    total = _f("total_tokens")
+    total = int(total) if total is not None else prompt + completion
+
+    logger = Logger.get()
+    if not hasattr(logger, "set_contextarg") or not hasattr(logger, "context"):
+        return
+    acc = dict(logger.context.get("token_usage") or {})
+    acc["prompt_tokens"] = acc.get("prompt_tokens", 0) + prompt
+    acc["completion_tokens"] = acc.get("completion_tokens", 0) + completion
+    acc["total_tokens"] = acc.get("total_tokens", 0) + total
+    acc["num_calls"] = acc.get("num_calls", 0) + 1
+    logger.set_contextarg("token_usage", acc)
+
+
 def assistant(text):
     return f":robot_face: [red]{text}[/red]"
 
