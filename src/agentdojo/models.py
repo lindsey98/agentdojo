@@ -80,7 +80,7 @@ class ModelsEnum(StrEnum):
     """Qwen3.6 35B A3B served locally (vLLM served-model-name), via the local provider."""
     QWEN_3_30B_LOCAL = "Qwen3-30B-A3B-Instruct-2507"
     """Qwen3 30B A3B Instruct served locally, via the local provider."""
-    GEMMA_4_26B_A4B_LOCAL = "gemma-4-26B-A4B-it"
+    GEMMA_4_26B_A4B_LOCAL = "gemma-4-26B-A4B"
     """Gemma 4 26B A4B served locally (vLLM served-model-name), via the local provider."""
     NEMOTRON_3_NANO_30B_A3B_LOCAL = "Nemotron-3-Nano-30B-A3B"
     """Nemotron 3 Nano 30B A3B served locally (vLLM served-model-name), via the local provider."""
@@ -185,7 +185,7 @@ MODEL_NAMES = {
     "qwen/qwen3.6-35b-a3b": "Qwen 3",
     "Qwen3.6-35B-A3B": "Qwen created by Alibaba Cloud.",
     "Qwen3-30B-A3B-Instruct-2507": "Qwen created by Alibaba Cloud.",
-    "gemma-4-26B-A4B-it": "Gemma created by Google.",
+    "gemma-4-26B-A4B": "Gemma created by Google.",
     "Nemotron-3-Nano-30B-A3B": "Nemotron created by NVIDIA.",
     "google/gemini-2.5-pro": "AI model developed by Google",
     "google/gemini-2.5-flash" : "AI model developed by Google", 
