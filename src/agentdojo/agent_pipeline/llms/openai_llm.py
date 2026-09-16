@@ -188,6 +188,18 @@ def chat_completion_request(
     )
 
 
+def _accumulate_token_usage(extra_args: dict, usage) -> None:
+    """Add a completion's token usage into extra_args (input_tokens / output_tokens).
+
+    Threaded through the pipeline so per-task token counts land in the trace JSON, for any
+    OpenAI-compatible LLM element. No-op when the server does not report usage.
+    """
+    if usage is None:
+        return
+    extra_args["input_tokens"] = extra_args.get("input_tokens", 0) + (getattr(usage, "prompt_tokens", 0) or 0)
+    extra_args["output_tokens"] = extra_args.get("output_tokens", 0) + (getattr(usage, "completion_tokens", 0) or 0)
+
+
 class OpenAILLM(BasePipelineElement):
     """LLM pipeline element that uses OpenAI's API.
 
@@ -222,6 +234,7 @@ class OpenAILLM(BasePipelineElement):
         completion = chat_completion_request(
             self.client, self.model, openai_messages, openai_tools, self.reasoning_effort, self.temperature
         )
+        _accumulate_token_usage(extra_args, getattr(completion, "usage", None))
         output = _openai_to_assistant_message(completion.choices[0].message)
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args

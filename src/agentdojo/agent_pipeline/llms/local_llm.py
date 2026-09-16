@@ -48,29 +48,28 @@ def chat_completion_request(
     messages: list[ChatCompletionMessageParam],
     temperature: float | None = 1.0,
     top_p: float | None = 0.9,
-) -> str:
+) -> tuple[str, object | None]:
+    usage = None
     try:
         reformatted_messages = []
         for message in messages:
             content = reformat_message(message)
             reformatted_messages.append({"role": message["role"], "content": content})
-        response = (
-            client.chat.completions.create(
-                model=model,
-                messages=reformatted_messages,
-                temperature=temperature,
-                top_p=top_p,
-                seed=random.randint(0, 1000000),
-            )
-            .choices[0]
-            .message.content
+        completion = client.chat.completions.create(
+            model=model,
+            messages=reformatted_messages,
+            temperature=temperature,
+            top_p=top_p,
+            seed=random.randint(0, 1000000),
         )
+        response = completion.choices[0].message.content
+        usage = getattr(completion, "usage", None)
     except Exception as e:
         print(f"[debug] error: {e}")
         response = ""
     if response is None:
         raise InvalidModelOutputError("No response from model")
-    return response
+    return response, usage
 
 
 _tool_calling_prompt = """# Instructions
@@ -194,12 +193,15 @@ class LocalLLM(BasePipelineElement):
                     content = json.dumps({"result": func_result})
             messages_.append({"role": role, "content": content})
 
-        completion = chat_completion_request(
+        completion, usage = chat_completion_request(
             self.client,
             model=self.model,
             messages=messages_,
             temperature=self.temperature,
             top_p=self.top_p,
         )
+        if usage is not None:
+            extra_args["input_tokens"] = extra_args.get("input_tokens", 0) + (getattr(usage, "prompt_tokens", 0) or 0)
+            extra_args["output_tokens"] = extra_args.get("output_tokens", 0) + (getattr(usage, "completion_tokens", 0) or 0)
         output = _parse_model_output(completion)
         return query, runtime, env, [*messages, output], extra_args
