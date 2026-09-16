@@ -23,6 +23,7 @@ from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wai
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionCall, FunctionsRuntime
+from agentdojo.logging import record_token_usage
 from agentdojo.types import (
     ChatAssistantMessage,
     ChatMessage,
@@ -222,6 +223,7 @@ class OpenAILLM(BasePipelineElement):
         completion = chat_completion_request(
             self.client, self.model, openai_messages, openai_tools, self.reasoning_effort, self.temperature
         )
+        record_token_usage(getattr(completion, "usage", None))
         output = _openai_to_assistant_message(completion.choices[0].message)
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args
@@ -258,6 +260,7 @@ class OpenAILLMToolFilter(BasePipelineElement):
             ),
             reasoning_effort=self.reasoning_effort or NOT_GIVEN,
         )
+        record_token_usage(getattr(completion, "usage", None))
         output = _openai_to_assistant_message(completion.choices[0].message)
 
         new_tools = {}
