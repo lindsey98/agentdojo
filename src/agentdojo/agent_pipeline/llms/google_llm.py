@@ -13,6 +13,7 @@ from typing_extensions import deprecated
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionCall, FunctionsRuntime
+from agentdojo.logging import record_token_usage
 from agentdojo.types import ChatAssistantMessage, ChatMessage, text_content_block_from_string
 
 logger = logging.getLogger(__name__)
@@ -293,6 +294,17 @@ class GoogleLLM(BasePipelineElement):
             google_messages,  # type: ignore
             generation_config=generation_config,
         )
+        # Google names usage fields differently (prompt_token_count / candidates_token_count /
+        # total_token_count), so normalize to the shape record_token_usage understands.
+        _usage = getattr(completion, "usage_metadata", None)
+        if _usage is not None:
+            record_token_usage(
+                {
+                    "prompt_tokens": getattr(_usage, "prompt_token_count", 0) or 0,
+                    "completion_tokens": getattr(_usage, "candidates_token_count", 0) or 0,
+                    "total_tokens": getattr(_usage, "total_token_count", None),
+                }
+            )
         output = _google_to_assistant_message(completion)
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args
