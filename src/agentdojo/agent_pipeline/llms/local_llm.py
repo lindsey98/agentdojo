@@ -7,6 +7,7 @@ vllm serve /path/to/huggingface/model
 ```
 """
 
+import ast
 import json
 import random
 import re
@@ -115,40 +116,76 @@ def _make_system_prompt(system_message: str, tools: Collection[Function]) -> str
     return prompt
 
 
+# Tool-call formats emitted by prompted local models. Both are anchored on their closing tag so
+# the argument block (`.*?`, non-greedy) still spans nested braces:
+#   <function=NAME>{...}</function>          (Qwen-style, prompted by _tool_calling_prompt)
+#   <|tool_call>call:NAME{...}<tool_call|>   (Gemma-style)
+_FUNCTION_TAG_RE = re.compile(r"<function\s*=\s*([^>]+?)>(.*?)</function>", re.S)
+_GEMMA_TOOL_CALL_RE = re.compile(r"<\|tool_call>\s*call:\s*([A-Za-z0-9_]+)\s*(\{.*?\})\s*<tool_call\|>", re.S)
+# Unterminated `<function=NAME>{...}` with no closing tag (fallback for a truncated generation).
+_FUNCTION_OPEN_RE = re.compile(r"<function\s*=\s*([^>]+)>")
+
+
+def _loads_args(raw: str) -> dict | None:
+    """Parse a tool-call argument block into a dict, tolerantly. Handles valid JSON, an empty body
+    (no-arg call), and the unquoted-key pseudo-JSON some models emit (e.g. `{day: "2024-05-15"}`)."""
+    raw = raw.strip()
+    if raw == "":
+        return {}
+    try:
+        v = json.loads(raw)
+        return v if isinstance(v, dict) else None
+    except Exception:
+        pass
+    # Quote bare object keys: {day: "x", n: 1} -> {"day": "x", "n": 1}
+    fixed = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)', r'\1"\2"\3', raw)
+    try:
+        v = json.loads(fixed)
+        return v if isinstance(v, dict) else None
+    except Exception:
+        pass
+    try:
+        v = ast.literal_eval(raw)
+        return v if isinstance(v, dict) else None
+    except Exception:
+        return None
+
+
 def _parse_model_output(completion: str) -> ChatAssistantMessage:
-    """Improved parsing to handle multiple function calls"""
+    """Parse a prompted model's completion into an assistant message, extracting every tool call.
+
+    Recognizes both the `<function=NAME>{...}</function>` (Qwen-style) and
+    `<|tool_call>call:NAME{...}<tool_call|>` (Gemma-style) formats, supports multiple calls per
+    message, and parses arguments tolerantly (see `_loads_args`)."""
     default_message = ChatAssistantMessage(
         role="assistant", content=[text_content_block_from_string(completion.strip())], tool_calls=[]
     )
-    open_tag_pattern = re.compile(r"<function\s*=\s*([^>]+)>")
-    open_match = open_tag_pattern.search(completion)
-    if not open_match:
+
+    tool_calls: list[FunctionCall] = []
+    for pattern in (_GEMMA_TOOL_CALL_RE, _FUNCTION_TAG_RE):
+        for name, raw in pattern.findall(completion):
+            args = _loads_args(raw)
+            if args is None:
+                continue
+            try:
+                tool_calls.append(FunctionCall(function=name.strip(), args=args))
+            except ValidationError:
+                continue
+
+    # Fallback: a single unterminated `<function=NAME>{...}` (no closing tag) from a truncated output.
+    if not tool_calls:
+        m = _FUNCTION_OPEN_RE.search(completion)
+        if m and "</function>" not in completion:
+            raw = completion[m.end() :]
+            args = _loads_args(raw)
+            if args is not None:
+                try:
+                    tool_calls.append(FunctionCall(function=m.group(1).strip(), args=args))
+                except ValidationError:
+                    pass
+
+    if not tool_calls:
         return default_message
-
-    function_name = open_match.group(1).strip()
-
-    start_idx = open_match.end()
-    close_tag = "</function>"
-    end_idx = completion.find(close_tag, start_idx)
-    end_idx = end_idx if end_idx != -1 else len(completion)
-    raw_json = completion[start_idx:end_idx].strip()
-
-    # A no-argument call is often emitted as `<function=name></function>` (empty body) instead of
-    # the prompted `<function=name>{}</function>`. Treat an empty body as an empty arg dict so the
-    # parameterless tool call is not silently dropped (which would end the loop with no action).
-    if raw_json == "":
-        raw_json = "{}"
-
-    try:
-        params_dict = json.loads(raw_json)
-        tool_calls = [FunctionCall(function=function_name, args=params_dict)]
-    except json.JSONDecodeError:
-        print(f"[debug] broken JSON: {raw_json!r}")
-        return default_message
-    except ValidationError:
-        print(f"[debug] validation error (probably not type dict): {raw_json!r}")
-        return default_message
-
     return ChatAssistantMessage(
         role="assistant", content=[text_content_block_from_string(completion.strip())], tool_calls=tool_calls
     )
