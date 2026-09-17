@@ -81,7 +81,10 @@ class ModelsEnum(StrEnum):
     QWEN_3_30B_LOCAL = "Qwen3-30B-A3B-Instruct-2507"
     """Qwen3 30B A3B Instruct served locally, via the local provider."""
     GEMMA_4_26B_A4B_LOCAL = "gemma-4-26B-A4B"
-    """Gemma 4 26B A4B served locally (vLLM served-model-name), via the local provider."""
+    """Gemma 4 26B A4B served locally (vLLM served-model-name), via the vllm_parsed provider
+    (native tool calling). Gemma's own <|tool_call>...<tool_call|> text format — including its
+    <|"|>-quoted string args — is not reliably recoverable from text, so the vLLM server parses
+    tool calls natively; serve it with --enable-auto-tool-choice --tool-call-parser."""
     NEMOTRON_3_NANO_30B_A3B_LOCAL = "Nemotron-3-Nano-30B-A3B"
     """Nemotron 3 Nano 30B A3B served locally (vLLM served-model-name), via the local provider."""
     OPENROUTER_GEMINI_2_5_PRO = "google/gemini-2.5-pro"
@@ -133,7 +136,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.QWEN3_6_35B_A3B: "openrouter",
     ModelsEnum.QWEN_3_6_35B_LOCAL: "local",
     ModelsEnum.QWEN_3_30B_LOCAL: "local",
-    ModelsEnum.GEMMA_4_26B_A4B_LOCAL: "local",
+    ModelsEnum.GEMMA_4_26B_A4B_LOCAL: "vllm_parsed",
     ModelsEnum.NEMOTRON_3_NANO_30B_A3B_LOCAL: "local",
     ModelsEnum.OPENROUTER_GEMINI_2_5_PRO: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_2_5_FLASH: "openrouter",
