@@ -489,9 +489,14 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
         )
         if model_id is None:
             model_id = _get_local_model_id(port)
+        # Tool-call wire format for the prompted local path. Gemma is tuned for python-style calls
+        # (`<function-call>[fn(a=1)]</function-call>`); Qwen/others use the `<function=..>{json}..`
+        # format. Auto-pick by model name; override with LOCAL_TOOL_CALL_FORMAT=python|json.
+        tool_call_format = os.getenv("LOCAL_TOOL_CALL_FORMAT") or ("python" if "gemma" in model_id.lower() else "json")
         logging.info(f"Using local model: {model_id}")
         logging.info(f"Using tool delimiter: {tool_delimiter}")
-        llm = LocalLLM(client, model_id, tool_delimiter=tool_delimiter)
+        logging.info(f"Using tool-call format: {tool_call_format}")
+        llm = LocalLLM(client, model_id, tool_delimiter=tool_delimiter, tool_call_format=tool_call_format)
     elif provider == "vllm_parsed":
         port = os.getenv("LOCAL_LLM_PORT", 8000)
         client = openai.OpenAI(
