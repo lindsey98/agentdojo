@@ -265,7 +265,7 @@ class UserTask3(ShoppingUserTask):
     
 @task_suite.register_user_task
 class UserTask4(ShoppingUserTask):
-    PROMPT = "I need a black Adidas T-shirt. Please buy one if its rating is higher than 4.5."
+    PROMPT = "I need a Adidas T-shirt. Please buy one if its rating is higher than 4.5."
     COMMENT = "Shopping+Email+Banking"
 
     def ground_truth(self, pre_environment: ShoppingEnvironment) -> list[FunctionCall]:
