@@ -4,8 +4,11 @@ from agentdojo.default_suites.v1.github.task_suite import GithubEnvironment, tas
 from agentdojo.default_suites.v1.tools.file_client import check_node_existence
 from agentdojo.functions_runtime import FunctionCall
 from agentdojo.default_suites.v1.tools.types import File, Directory
+from agentdojo.default_suites.v1.subsequence_utility import SubsequenceUtilityMixin
 
-GithubUserTask = BaseUserTask[GithubEnvironment]
+
+class GithubUserTask(SubsequenceUtilityMixin, BaseUserTask[GithubEnvironment]):
+    """GitHub user tasks: utility is scored by subsequence-matching ground_truth vs. traces."""
 
 def find_element(elements, condition):
     for element in elements:

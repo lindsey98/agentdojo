@@ -7,8 +7,11 @@ from agentdojo.default_suites.v1.dailylife.task_suite import DailyLifeEnvironmen
 from agentdojo.default_suites.v1.tools.file_client import check_node_existence, get_node_instance
 from agentdojo.functions_runtime import FunctionCall
 from agentdojo.default_suites.v1.tools.types import CalendarEvent, Email, File, Directory
+from agentdojo.default_suites.v1.subsequence_utility import SubsequenceUtilityMixin
 
-DailyLifeUserTask = BaseUserTask[DailyLifeEnvironment]
+
+class DailyLifeUserTask(SubsequenceUtilityMixin, BaseUserTask[DailyLifeEnvironment]):
+    """Daily-life user tasks: utility is scored by subsequence-matching ground_truth vs. traces."""
 
 def find_element(elements, condition):
     for element in elements:
