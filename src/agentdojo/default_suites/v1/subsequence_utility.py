@@ -87,10 +87,18 @@ def ground_truth_is_subsequence(
 
 
 class SubsequenceUtilityMixin:
-    """Score utility by subsequence-matching the task's ground truth against the runtime traces.
+    """Score utility leniently: pass if the ground-truth action calls were performed (as an ordered,
+    arg-matching subsequence; read-only calls order-free/deduped -- see `ground_truth_is_subsequence`),
+    OTHERWISE defer to the task's own ``utility()``.
+
+    Implemented by returning ``True`` on a subsequence match and ``None`` otherwise: ``None`` makes the
+    framework fall back to ``utility()``. This never makes a task stricter than its original check --
+    it only ADDS the trace-based rescue path -- so it fixes action tasks whose env-state ``utility()``
+    was brittle (e.g. a hard-coded quantity) while leaving Q&A/read tasks, whose ``utility()`` checks
+    the model's answer, to be judged by that answer.
 
     Mixed in BEFORE ``BaseUserTask`` so this ``utility_from_traces`` takes precedence over the base's
-    (which returns ``None`` and would fall back to the env-state ``utility()``)."""
+    (which always returns ``None``)."""
 
     def utility_from_traces(
         self,
@@ -99,4 +107,6 @@ class SubsequenceUtilityMixin:
         post_environment,
         traces: Sequence[FunctionCall],
     ) -> bool | None:
-        return ground_truth_is_subsequence(self.ground_truth(pre_environment), traces)
+        if ground_truth_is_subsequence(self.ground_truth(pre_environment), traces):
+            return True
+        return None  # defer to the task's own utility()
