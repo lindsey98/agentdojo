@@ -353,7 +353,7 @@ class UserTask5(ShoppingUserTask):
                 function="checkout_selected_cart",
                 args={
                     "product_ids": ["P045"],
-                    "discount": "SPRING10"
+                    "discount_code": "SPRING10"
                 },
             ),
             FunctionCall(

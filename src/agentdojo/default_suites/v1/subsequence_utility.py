@@ -49,18 +49,41 @@ def _call_matches(gt: FunctionCall, actual: FunctionCall) -> bool:
     return True
 
 
+# Observational / read-only tools whose ordering (and call count) is not a meaningful part of a
+# solution: they only look at state, so an agent may call them in any order, before or after the
+# actions, and need not repeat them just because the ground truth happens to list them twice.
+# Everything else (cart_add_product, checkout_selected_cart, verify_shopping_account, send_email,
+# create_*, update_*, delete_*, transfer_*, download_*, star_*, ...) is a state-changing action
+# whose relative order IS meaningful and is checked as an ordered subsequence.
+_READONLY_PREFIXES = ("get_", "view_", "search_", "list_", "read_", "browse_")
+
+
+def _is_order_free(function_name: str) -> bool:
+    return function_name.startswith(_READONLY_PREFIXES)
+
+
 def ground_truth_is_subsequence(
     ground_truth: Sequence[FunctionCall], traces: Sequence[FunctionCall]
 ) -> bool:
-    """True iff `ground_truth` is a subsequence of `traces` under `_call_matches` (order preserved,
-    gaps allowed)."""
+    """Hybrid match. The *action* (state-changing) ground-truth calls must appear in `traces` as an
+    ordered subsequence (order preserved, extra calls allowed) under `_call_matches`. The *read-only*
+    ground-truth calls (see `_is_order_free`) must each merely appear somewhere in `traces`, in any
+    order and regardless of how many times the ground truth lists them (deduplicated)."""
+    action_gt = [c for c in ground_truth if not _is_order_free(c.function)]
+    readonly_gt = [c for c in ground_truth if _is_order_free(c.function)]
+
+    # Actions: ordered subsequence.
     i = 0
     for actual in traces:
-        if i >= len(ground_truth):
+        if i >= len(action_gt):
             break
-        if _call_matches(ground_truth[i], actual):
+        if _call_matches(action_gt[i], actual):
             i += 1
-    return i == len(ground_truth)
+    if i != len(action_gt):
+        return False
+
+    # Read-only: each must appear somewhere (order-free, dedup).
+    return all(any(_call_matches(gt, actual) for actual in traces) for gt in readonly_gt)
 
 
 class SubsequenceUtilityMixin:
