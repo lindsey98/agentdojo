@@ -21,9 +21,22 @@ from collections.abc import Sequence
 from agentdojo.functions_runtime import FunctionCall
 
 
+def _values_equal(gt_val, actual_val) -> bool:
+    """Arg-value equality. List/tuple args are compared as SETS (order- and duplicate-insensitive),
+    so e.g. product_ids ['P030'] matches ['P030', 'P030']. Everything else uses plain equality."""
+    if isinstance(gt_val, (list, tuple)) and isinstance(actual_val, (list, tuple)):
+        try:
+            return set(gt_val) == set(actual_val)
+        except TypeError:
+            # Unhashable elements (e.g. dicts): emulate set equality by mutual membership.
+            return all(x in actual_val for x in gt_val) and all(x in gt_val for x in actual_val)
+    return gt_val == actual_val
+
+
 def _call_matches(gt: FunctionCall, actual: FunctionCall) -> bool:
     """A ground-truth call matches an actual call: same function name, and every non-placeholder
-    ground-truth arg is present in the actual call with an equal value (extra actual args ignored)."""
+    ground-truth arg is present in the actual call with an equal value (extra actual args ignored;
+    list args compared as sets)."""
     if gt.function != actual.function:
         return False
     placeholders = set((gt.placeholder_args or {}).keys())
@@ -31,7 +44,7 @@ def _call_matches(gt: FunctionCall, actual: FunctionCall) -> bool:
     for key, value in (gt.args or {}).items():
         if key in placeholders:
             continue  # dynamic field (e.g. OTP) -> wildcard, not value-checked
-        if key not in actual_args or actual_args[key] != value:
+        if key not in actual_args or not _values_equal(value, actual_args[key]):
             return False
     return True
 
