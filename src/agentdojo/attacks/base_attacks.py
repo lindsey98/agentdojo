@@ -1,4 +1,5 @@
 import abc
+import warnings
 from collections import defaultdict
 from functools import lru_cache
 from typing import NewType
@@ -161,9 +162,14 @@ def get_model_name_from_pipeline(pipeline: BasePipelineElement) -> str:
         if full_name in pipeline.name:
             return model_name
 
-    raise ValueError(
-        f"No valid model name not found in pipeline name `{pipeline.name}`. Valid model names are {sorted(set(MODEL_NAMES.values()))}"
+    # The pipeline name does not embed a known model id (e.g. a custom agent wrapper whose name is
+    # "agentpi-code+openai_gpt-4o-mini"). Rather than crash the whole run, fall back to the generic
+    # name -- the attack simply addresses "the AI language model" (same as the *_no_model_name variants).
+    warnings.warn(
+        f"No known model id found in pipeline name `{pipeline.name}`; "
+        f"using generic model name {DEFAULT_MODEL_NAME!r} for the attack."
     )
+    return DEFAULT_MODEL_NAME
 
 
 def get_model_name(
