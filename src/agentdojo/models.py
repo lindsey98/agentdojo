@@ -128,7 +128,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.GEMINI_2_0_FLASH_EXP: "google",
     ModelsEnum.GEMINI_2_0_FLASH_001: "google",
     ModelsEnum.GEMINI_2_5_FLASH_PREVIEW_04_17: "google",
-    ModelsEnum.GEMINI_2_5_FLASH: "google",
+    ModelsEnum.GEMINI_2_5_FLASH: "openai",  # served via an OpenAI-compatible relay (OPENAI_BASE_URL); use google/gemini-2.5-flash for Vertex/OpenRouter
     ModelsEnum.GEMINI_2_5_PRO_PREVIEW_05_06: "google",
     ModelsEnum.GEMINI_2_5_PRO: "google",
     ModelsEnum.LOCAL: "local",
