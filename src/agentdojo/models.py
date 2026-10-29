@@ -89,11 +89,11 @@ class ModelsEnum(StrEnum):
     tool calls natively; serve it with --enable-auto-tool-choice --tool-call-parser."""
     NEMOTRON_3_NANO_30B_A3B_LOCAL = "Nemotron-3-Nano-30B-A3B"
     """Nemotron 3 Nano 30B A3B served locally (vLLM served-model-name), via the local provider."""
-    DEEPSEEK_V4_1_FLASH_LOCAL = "deepseek-v4.1-flash"
-    """DeepSeek V4.1 Flash served locally (vLLM served-model-name), via the vllm_parsed provider
-    (native tool calling). DeepSeek's own tool-call token format is not one of the text formats the
-    local parser recognizes, so the vLLM server parses tool calls natively; serve it with
-    --enable-auto-tool-choice --tool-call-parser (e.g. deepseek_v3 / deepseek_v31)."""
+    DEEPSEEK_V4_1_FLASH = "deepseek-v4.1-flash"
+    """DeepSeek V4.1 Flash, served via an OpenAI-compatible relay (the openai provider reads
+    OPENAI_BASE_URL / OPENAI_API_KEY), same as gpt-4o-mini. IPIGuard drives it through its JSON
+    prompting path, so no native tool-call parser is required. To serve it on a local vLLM instead,
+    point the openai provider's base_url at that server, or re-add a vllm_parsed entry."""
     OPENROUTER_GEMINI_2_5_PRO = "google/gemini-2.5-pro"
     OPENROUTER_GEMINI_2_5_FLASH = "google/gemini-2.5-flash"
     OPENROUTER_GEMINI_3_PRO_PREVIEW = "google/gemini-3-pro-preview"
@@ -146,7 +146,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.QWEN_3_30B_LOCAL: "local",
     ModelsEnum.GEMMA_4_26B_A4B_LOCAL: "vllm_parsed",
     ModelsEnum.NEMOTRON_3_NANO_30B_A3B_LOCAL: "local",
-    ModelsEnum.DEEPSEEK_V4_1_FLASH_LOCAL: "vllm_parsed",
+    ModelsEnum.DEEPSEEK_V4_1_FLASH: "openai",
     ModelsEnum.OPENROUTER_GEMINI_2_5_PRO: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_2_5_FLASH: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_3_PRO_PREVIEW: "openrouter",
