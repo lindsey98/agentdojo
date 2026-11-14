@@ -5,6 +5,7 @@ import agentdojo.attacks.chat_inject  # -- needed to register the chat_inject at
 import agentdojo.attacks.data_only_attack  # -- needed to register the data_only attack
 import agentdojo.attacks.defense_aware  # -- needed to register de_deviation / de_paraphrase attacks
 import agentdojo.attacks.dos_attacks  # -- needed to register the attacks
+import agentdojo.attacks.near_target_attack  # -- needed to register near_target_harmful / near_target_incorrect
 import agentdojo.attacks.important_instructions_attacks  # noqa: F401  -- needed to register the attacks
 from agentdojo.attacks.attack_registry import load_attack, register_attack
 from agentdojo.attacks.base_attacks import BaseAttack, FixedJailbreakAttack
