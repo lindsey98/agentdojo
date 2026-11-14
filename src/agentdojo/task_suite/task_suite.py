@@ -62,14 +62,57 @@ def messages_to_dict(messages: Sequence[ChatMessage]) -> list[dict[str, str]]:
     return [transform(msg) for msg in messages]
 
 
+def _tool_result_not_executed(message: ChatMessage) -> bool:
+    """Whether a tool-result message says its call did NOT run: the tool raised (`error` set), or a defense
+    refused it before it reached the environment and marked the result `executed=False`."""
+    return bool(message.get("error")) or message.get("executed") is False
+
+
+def _pop_matching_call(pending: list[FunctionCall], message: ChatMessage) -> FunctionCall | None:
+    """Remove and return the pending call a tool-result message answers: the same object, else the same
+    id, else the same function + args, else the oldest pending call."""
+    result_call = message.get("tool_call")
+    result_id = message.get("tool_call_id")
+    matchers = (
+        lambda c: c is result_call,
+        lambda c: result_id is not None and getattr(c, "id", None) == result_id,
+        lambda c: (
+            result_call is not None
+            and getattr(c, "function", None) == getattr(result_call, "function", None)
+            and getattr(c, "args", None) == getattr(result_call, "args", None)
+        ),
+        lambda c: True,
+    )
+    for matches in matchers:
+        for i, call in enumerate(pending):
+            if matches(call):
+                return pending.pop(i)
+    return None
+
+
 def functions_stack_trace_from_messages(
     messages: Sequence[ChatMessage],
 ) -> list[FunctionCall]:
-    tool_calls = []
+    """The calls the agent EXECUTED, in order.
+
+    A call whose tool result reports that it did not run (see `_tool_result_not_executed`) is left out: it
+    never touched the environment, so neither utility nor security may be credited to it. Without this a
+    trace-based check (subsequence utility, data-only / near-target security) counts a call a defense
+    blocked exactly like one that landed. A call with no result message at all is kept, as before."""
+    tool_calls: list[FunctionCall] = []
+    pending: list[FunctionCall] = []
     for message in messages:
         if message["role"] == "assistant":
             for tool_call in message["tool_calls"] or []:
                 tool_calls.append(tool_call)
+                pending.append(tool_call)
+        elif message["role"] == "tool":
+            call = _pop_matching_call(pending, message)
+            if call is not None and _tool_result_not_executed(message):
+                for i, kept in enumerate(tool_calls):
+                    if kept is call:
+                        del tool_calls[i]
+                        break
     return tool_calls
 
 
