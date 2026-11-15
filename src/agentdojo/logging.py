@@ -8,6 +8,8 @@ import warnings
 
 from pydantic import BaseModel
 from rich.live import Live
+from rich.markup import escape
+from rich.text import Text
 from rich.table import Table
 
 from agentdojo.ast_utils import create_python_function_from_tool_call
@@ -102,7 +104,7 @@ def system(text):
 
 class OutputLogger(Logger):
     def log_error(self, message: str):
-        logging.warning(f"[red]API error: {message}[/red]", extra={"markup": True})
+        logging.warning(f"[red]API error: {escape(str(message))}[/red]", extra={"markup": True})
 
     def __init__(self, logdir: str | None, live: Live | None = None):
         self.messages = []
@@ -124,7 +126,7 @@ class OutputLogger(Logger):
             self.table = Table(
                 "Role",
                 "Content",
-                title=f"[{suite_name}][{user_task_id}{injection_task_id}]",
+                title=Text(f"[{suite_name}][{user_task_id}{injection_task_id}]"),
                 show_lines=True,
             )
             self.previous_user_task_id = user_task_id
@@ -150,27 +152,27 @@ class OutputLogger(Logger):
                 role = assistant(role)
             elif role == "tool":
                 if "error" in message and message["error"] is not None:
-                    content = f"[red]{message['error']}[/red]"
+                    content = str(message["error"])
                 if "tool_call" in message:
                     try:
-                        role = f"{role} [bold]{message['tool_call'].function}[/bold]"
+                        role = f"{role} [bold]{escape(str(message['tool_call'].function))}[/bold]"
                     except AttributeError:
-                        role = f"{role} [bold]{message['tool_call'].get('name')}[/bold]"
+                        role = f"{role} [bold]{escape(str(message['tool_call'].get('name')))}[/bold]"
                 role = tool(role)
             else:
                 role = system(role)
             if self.live is None:
                 logging_content = textwrap.shorten(f"{content}{tool_calls_content}", width=10000, placeholder="[...]")
                 if injection_task_id is not None:
-                    current_task_id = rf"\[{user_task_id}]\[{injection_task_id}]"
+                    current_task_id = escape(f"[{user_task_id}][{injection_task_id}]")
                 else:
-                    current_task_id = rf"\[{user_task_id}]"
+                    current_task_id = escape(f"[{user_task_id}]")
                 logging.info(
-                    rf"\[{pipeline_name}]\[{suite_name}]{current_task_id} {role}: {logging_content}",
+                    f"{escape(f'[{pipeline_name}][{suite_name}]')}{current_task_id} {role}: {escape(logging_content)}",
                     extra={"markup": True},
                 )
             else:
-                self.table.add_row(role, content + tool_calls_content)
+                self.table.add_row(role, Text(content + tool_calls_content))
                 self.live.update(self.table)
 
 
