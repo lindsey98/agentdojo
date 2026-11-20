@@ -58,6 +58,19 @@ def _strip_tool_call_markup(text: str | None) -> str | None:
     return cleaned.strip()
 
 
+# Some OpenAI-compatible relays ignore response_format=json_object and wrap the JSON in a
+# ```json ... ``` markdown fence (e.g. gemini-2.5-flash served through a relay), so a strict
+# json.loads() dies at char 0. Strip one enclosing fence; bare JSON passes through unchanged.
+_JSON_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_json_fence(text: str | None) -> str | None:
+    if not text:
+        return text
+    m = _JSON_FENCE_RE.match(text)
+    return m.group(1).strip() if m else text
+
+
 def _tool_call_to_str(tool_call: FunctionCall, error=None) -> str:
     tool_call_dict = {
         "function": tool_call.function,
@@ -99,6 +112,15 @@ def chat_completion_request(
     # Report usage into the unified per-task token_usage field (same mechanism as the other LLMs),
     # so IPIGuard runs are directly comparable with the baseline/other defenses.
     record_token_usage(getattr(completion, "usage", None))
+    if json_format:
+        # Central un-fencing: every JSON-mode request flows through here, so downstream json.loads
+        # (DAG construction, args-update, pre-plan) sees bare JSON even when a relay fences it.
+        try:
+            msg = completion.choices[0].message
+            if msg.content is not None:
+                msg.content = _strip_json_fence(msg.content)
+        except Exception:  # never let unfencing break a generation
+            pass
     return completion
 
 
