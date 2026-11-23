@@ -257,6 +257,12 @@ class OpenAIConstructLLM(OpenAILLM):
         tool_calls_data = dag_data.get("tool_calls", [])
         dag = nx.DiGraph()
         
+        # A model sometimes emits a depends_on id that was never planned as a node. networkx's
+        # add_edge would then auto-create a phantom node with no `function_call`, which later
+        # crashes _dag_to_json_str (KeyError: 'function_call'). Keep only dependencies that name a
+        # real node so no phantom node is ever created.
+        valid_ids = {str(tc["id"]) for tc in tool_calls_data if "id" in tc}
+
         # add node
         for tool_call_data in tool_calls_data:
             tool_call = FunctionCall(
@@ -264,15 +270,16 @@ class OpenAIConstructLLM(OpenAILLM):
                 args=tool_call_data["args"],
                 id=str(tool_call_data["id"]),
             )
-            # if "depends_on" not in tool_call_data:
-            #     print(tool_call_data)
-            dag.add_node(tool_call.id, function_call=tool_call, depends_on=tool_call_data.get("depends_on", []))
+            deps = [str(d) for d in tool_call_data.get("depends_on", []) if str(d) in valid_ids]
+            dag.add_node(tool_call.id, function_call=tool_call, depends_on=deps)
 
-        # add edges    
+        # add edges
         for tool_call_data in tool_calls_data:
+            target = str(tool_call_data["id"])
             for dep in tool_call_data.get("depends_on", []):
-                dag.add_edge(str(dep), str(tool_call_data["id"]))
-        
+                if str(dep) in valid_ids:
+                    dag.add_edge(str(dep), target)
+
         return dag
 
     def _get_system_message(self, system_message: ChatSystemMessage | None, tools: Sequence[Function]
@@ -524,8 +531,11 @@ class OpenAITraverseLLM(OpenAILLM):
         
         for node_id in topological_order:
             node_data = dag.nodes[node_id]
-            function_call = node_data['function_call']
-            
+            function_call = node_data.get('function_call')
+            if function_call is None:
+                # Defensive: a phantom node (e.g. from a stray dependency id) carries no tool call.
+                continue
+
             tool_call = {
                 "id": function_call.id,
                 "function_name": function_call.function,
