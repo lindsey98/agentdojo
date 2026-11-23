@@ -71,6 +71,25 @@ def _strip_json_fence(text: str | None) -> str | None:
     return m.group(1).strip() if m else text
 
 
+# Models (e.g. gemini) sometimes emit a literal backslash inside a JSON string that isn't a valid
+# escape (a path, "\d", "\ "), so strict json.loads fails with "Invalid \escape". Double any
+# backslash that isn't one of the valid JSON string escapes (\" \\ \/ \b \f \n \r \t \uXXXX).
+_BAD_ESCAPE_RE = re.compile(r'\\(?!["\\/bfnrtu])')
+
+
+def _repair_json_escapes(text: str) -> str:
+    return _BAD_ESCAPE_RE.sub(r"\\\\", text)
+
+
+def _loads_json_object(text: str):
+    """json.loads, but if strict parsing fails on bad backslash escapes, retry on a repaired copy.
+    Valid JSON parses on the first try and is never altered; the repair is a best-effort fallback."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return json.loads(_repair_json_escapes(text))
+
+
 def _tool_call_to_str(tool_call: FunctionCall, error=None) -> str:
     tool_call_dict = {
         "function": tool_call.function,
@@ -153,7 +172,7 @@ def chat_completion_json(
             completion_tokens=completion.usage.completion_tokens,
         )
         try:
-            parsed = json.loads(completion.choices[0].message.content)
+            parsed = _loads_json_object(completion.choices[0].message.content)
             if isinstance(parsed, dict):
                 return parsed
             last_error = ValueError(f"expected a JSON object, got {type(parsed).__name__}")
