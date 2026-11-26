@@ -100,7 +100,9 @@ class ModelsEnum(StrEnum):
     OPENROUTER_GEMINI_3_FLASH_PREVIEW = "google/gemini-3-flash-preview"
     QWEN3_MAX = "qwen3-max"
     GLM_4_7_FLASH = "glm-4.7-flash"
-    """Zhipu GLM-4.7 Flash, served via an OpenAI-compatible relay (OPENAI_BASE_URL)."""
+    """Zhipu GLM-4.7 Flash served locally (vLLM served-model-name), via the vllm_parsed provider
+    (native tool calling). Serve it with --enable-auto-tool-choice --tool-call-parser (the GLM
+    parser), so the vLLM server emits parsed tool calls rather than relying on text recovery."""
 
 
 MODEL_PROVIDERS = {
@@ -154,7 +156,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.OPENROUTER_GEMINI_3_PRO_PREVIEW: "openrouter",
     ModelsEnum.OPENROUTER_GEMINI_3_FLASH_PREVIEW: "openrouter",
     ModelsEnum.QWEN3_MAX: "mulerouter",
-    ModelsEnum.GLM_4_7_FLASH: "openai",
+    ModelsEnum.GLM_4_7_FLASH: "vllm_parsed",
 }
 
 
